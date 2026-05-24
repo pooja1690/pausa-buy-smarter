@@ -66,14 +66,19 @@ function PausaApp() {
   const [questions, setQuestions] = useState<string[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Choice[]>([]);
+  const [deepQuestions, setDeepQuestions] = useState<string[]>([]);
+  const [deepIndex, setDeepIndex] = useState(0);
+  const [deepAnswers, setDeepAnswers] = useState<Choice[]>([]);
   const [result, setResult] = useState<{
     decision: Decision;
     explanation: string;
     id: string;
     estUses: number;
+    deep: boolean;
   } | null>(null);
 
   const fetchQuestions = useServerFn(generateQuestions);
+  const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
 
   const navigate = useNavigate();
@@ -84,10 +89,13 @@ function PausaApp() {
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
+    setDeepQuestions([]);
+    setDeepAnswers([]);
+    setDeepIndex(0);
     let qs: string[] = FALLBACK_QUESTIONS;
     try {
-      const r = await fetchQuestions({ data: { item: trimmed } });
-      if (r.questions?.length === 5) qs = r.questions;
+      const r = await fetchQuestions({ data: { item: trimmed, count: QUICK_COUNT } });
+      if (r.questions?.length === QUICK_COUNT) qs = r.questions;
     } catch {
       /* keep fallback */
     }
@@ -95,17 +103,11 @@ function PausaApp() {
     setStep("questions");
   }
 
-  async function answer(choice: Choice) {
-    const next = [...answers, choice];
-    setAnswers(next);
-    if (next.length < questions.length) {
-      setQIndex(qIndex + 1);
-      return;
-    }
+  async function finalizeQuick(allAnswers: Choice[]) {
     setStep("loading");
-    const { decision } = scoreAnswers(next);
+    const { decision } = scoreAnswers(allAnswers);
     const priceNum = price ? parseFloat(price) : undefined;
-    const signals = buildSignals(item.trim(), questions, next, priceNum);
+    const signals = buildSignals(item.trim(), questions, allAnswers, priceNum);
     let explanation = fallbackExplanation(decision);
     try {
       const r = await fetchExplanation({
@@ -116,7 +118,7 @@ function PausaApp() {
       /* keep fallback */
     }
     const id = crypto.randomUUID();
-    const estUses = estimateUses(next[0]);
+    const estUses = estimateUses(allAnswers[0]);
     addRecord({
       id,
       item: item.trim(),
@@ -124,11 +126,70 @@ function PausaApp() {
       decision,
       explanation,
       createdAt: Date.now(),
-      boughtAnyway: decision === "BUY" ? null : null,
+      boughtAnyway: null,
       estUses,
       questions,
     });
-    setResult({ decision, explanation, id, estUses });
+    setResult({ decision, explanation, id, estUses, deep: false });
+    setStep("result");
+  }
+
+  async function answer(choice: Choice) {
+    const next = [...answers, choice];
+    setAnswers(next);
+    if (next.length < questions.length) {
+      setQIndex(qIndex + 1);
+      return;
+    }
+    await finalizeQuick(next);
+  }
+
+  async function startDeep() {
+    if (!result) return;
+    const remaining = Math.max(1, Math.min(3, 8 - questions.length));
+    setStep("deep-preparing");
+    setDeepIndex(0);
+    setDeepAnswers([]);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const signals = buildSignals(item.trim(), questions, answers, priceNum);
+    let dq: string[] = FALLBACK_DEEP.slice(0, remaining);
+    try {
+      const r = await fetchDeepQuestions({
+        data: { item: item.trim(), decision: result.decision, signals, count: remaining as 1 | 2 | 3 },
+      });
+      if (r.questions?.length === remaining) dq = r.questions;
+    } catch {
+      /* keep fallback */
+    }
+    setDeepQuestions(dq);
+    setStep("deep-questions");
+  }
+
+  async function answerDeep(choice: Choice) {
+    const next = [...deepAnswers, choice];
+    setDeepAnswers(next);
+    if (next.length < deepQuestions.length) {
+      setDeepIndex(deepIndex + 1);
+      return;
+    }
+    if (!result) return;
+    setStep("deep-loading");
+    const allAnswers = [...answers, ...next];
+    const allQuestions = [...questions, ...deepQuestions];
+    const { decision } = scoreAnswers(allAnswers);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const signals = buildSignals(item.trim(), allQuestions, allAnswers, priceNum);
+    let explanation = fallbackExplanation(decision);
+    try {
+      const r = await fetchExplanation({
+        data: { item: item.trim(), decision, signals, deep: true },
+      });
+      if (r.explanation) explanation = r.explanation;
+    } catch {
+      /* keep fallback */
+    }
+    updateRecord(result.id, { decision, explanation, questions: allQuestions });
+    setResult({ ...result, decision, explanation, deep: true });
     setStep("result");
   }
 
@@ -139,6 +200,9 @@ function PausaApp() {
     setAnswers([]);
     setQuestions([]);
     setQIndex(0);
+    setDeepAnswers([]);
+    setDeepQuestions([]);
+    setDeepIndex(0);
     setResult(null);
   }
 
@@ -149,6 +213,15 @@ function PausaApp() {
     }
     setAnswers(answers.slice(0, -1));
     setQIndex(qIndex - 1);
+  }
+
+  function goBackDeep() {
+    if (deepIndex === 0) {
+      setStep("result");
+      return;
+    }
+    setDeepAnswers(deepAnswers.slice(0, -1));
+    setDeepIndex(deepIndex - 1);
   }
 
   return (
@@ -193,6 +266,21 @@ function PausaApp() {
 
       {step === "loading" && <LoadingScreen />}
 
+      {step === "deep-preparing" && <PreparingScreen item={item.trim()} deep />}
+
+      {step === "deep-questions" && deepQuestions.length > 0 && (
+        <QuestionScreen
+          index={deepIndex}
+          total={deepQuestions.length}
+          prompt={deepQuestions[deepIndex]}
+          onAnswer={answerDeep}
+          onBack={goBackDeep}
+          deep
+        />
+      )}
+
+      {step === "deep-loading" && <LoadingScreen deep />}
+
       {step === "result" && result && (
         <ResultScreen
           item={item}
@@ -200,6 +288,9 @@ function PausaApp() {
           decision={result.decision}
           explanation={result.explanation}
           estUses={result.estUses}
+          deep={result.deep}
+          canDeepen={!result.deep && questions.length < 8}
+          onDeepen={startDeep}
           onReset={reset}
           onHistory={() => navigate({ to: "/history" })}
         />
