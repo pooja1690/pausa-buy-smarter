@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const MODEL = "claude-sonnet-4-5";
 
-async function callClaude(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callClaude(systemPrompt: string, userPrompt: string, maxTokens = 400): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
@@ -16,7 +16,7 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 200,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -28,17 +28,39 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
     throw new Error(`Anthropic API error: ${res.status}`);
   }
   const data = (await res.json()) as { content: Array<{ type: string; text: string }> };
-  const text = data.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
-  return text;
+  return data.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
 }
 
-export const generateContextualQuestion = createServerFn({ method: "POST" })
+function extractJsonArray(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf("[");
+  const end = candidate.lastIndexOf("]");
+  if (start === -1 || end === -1) throw new Error("No JSON array found");
+  return JSON.parse(candidate.slice(start, end + 1));
+}
+
+export const generateQuestions = createServerFn({ method: "POST" })
   .inputValidator((d: { item: string }) => z.object({ item: z.string().min(1).max(200) }).parse(d))
   .handler(async ({ data }) => {
-    const system =
-      "You generate ONE short, calm, non-judgmental question (max 12 words, one line, no preamble, no quotes) that helps someone decide whether to buy a specific item. Return only the question.";
-    const question = await callClaude(system, `Item: ${data.item}`);
-    return { question: question.replace(/^["']|["']$/g, "").split("\n")[0].slice(0, 140) };
+    const system = `You generate exactly 5 short, calm, non-judgmental Yes/Maybe/No questions to help someone decide whether to buy a specific item. The questions MUST be highly tailored to the item — reference its actual use cases, context, and category. Avoid generic phrasing.
+
+Rules:
+- Each question must be answerable with Yes / Maybe / No.
+- Each question max 14 words, one sentence, no preamble.
+- Cover: real usage frequency, owning similar, alignment with goals/lifestyle, durability/long-term fit, and one item-specific consideration.
+- Phrase so "Yes" is the positive (pro-buy) answer when possible. If "No" is the positive answer (e.g. "Do you already own something similar?"), that is fine — but be consistent.
+- Output ONLY a JSON array of 5 strings. No prose, no keys, no markdown.`;
+
+    const raw = await callClaude(system, `Item: ${data.item}\n\nReturn the JSON array now.`, 500);
+    let parsed: unknown;
+    try {
+      parsed = extractJsonArray(raw);
+    } catch {
+      throw new Error("Failed to parse questions");
+    }
+    const arr = z.array(z.string().min(3).max(160)).length(5).parse(parsed);
+    return { questions: arr.map((q) => q.replace(/^["']|["']$/g, "").trim()) };
   });
 
 export const generateExplanation = createServerFn({ method: "POST" })
@@ -55,6 +77,6 @@ export const generateExplanation = createServerFn({ method: "POST" })
     const system =
       "You write ONE short sentence (max 20 words) explaining a buying decision. Tone: calm, practical, non-judgmental. No preamble, no quotes, no emojis.";
     const prompt = `Item: ${data.item}\nDecision: ${data.decision}\nSignals: ${data.signals.join("; ")}\nWrite one sentence.`;
-    const text = await callClaude(system, prompt);
+    const text = await callClaude(system, prompt, 200);
     return { explanation: text.replace(/^["']|["']$/g, "").split("\n")[0].slice(0, 240) };
   });
