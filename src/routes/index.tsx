@@ -364,7 +364,7 @@ function EntryScreen({
       </form>
 
       <p className="text-xs text-muted-foreground text-center mt-8 leading-relaxed">
-        Five quick taps. A calm answer. Under 10 seconds.
+        A few quick taps. A calm answer. Under 10 seconds.
       </p>
     </main>
   );
