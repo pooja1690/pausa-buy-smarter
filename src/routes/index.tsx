@@ -396,15 +396,17 @@ function QuestionScreen({
   prompt,
   onAnswer,
   onBack,
+  deep = false,
 }: {
   index: number;
   total: number;
   prompt: string;
   onAnswer: (c: Choice) => void;
   onBack: () => void;
+  deep?: boolean;
 }) {
   return (
-    <main className="flex-1 flex flex-col fade-up" key={index}>
+    <main className="flex-1 flex flex-col fade-up" key={`${deep ? "d" : "q"}-${index}`}>
       <div className="flex items-center gap-3 mb-10">
         <button
           onClick={onBack}
@@ -428,8 +430,8 @@ function QuestionScreen({
 
       <div className="flex-1 flex flex-col">
         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-1.5">
-          <Sparkles className="h-3 w-3" />
-          Question {index + 1} of {total}
+          {deep ? <Telescope className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+          {deep ? "Deep" : "Question"} {index + 1} of {total}
         </p>
 
         <h2 className="text-3xl leading-snug mb-12">{prompt}</h2>
