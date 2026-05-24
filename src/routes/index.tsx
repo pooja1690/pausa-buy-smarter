@@ -506,6 +506,9 @@ function ResultScreen({
   decision,
   explanation,
   estUses,
+  deep,
+  canDeepen,
+  onDeepen,
   onReset,
   onHistory,
 }: {
@@ -514,6 +517,9 @@ function ResultScreen({
   decision: Decision;
   explanation: string;
   estUses: number;
+  deep: boolean;
+  canDeepen: boolean;
+  onDeepen: () => void;
   onReset: () => void;
   onHistory: () => void;
 }) {
@@ -522,8 +528,13 @@ function ResultScreen({
 
   return (
     <main className="flex-1 flex flex-col fade-up">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2 flex items-center gap-1.5">
         Your pausa
+        {deep && (
+          <span className="inline-flex items-center gap-1 text-primary normal-case tracking-normal">
+            <Telescope className="h-3 w-3" /> deep
+          </span>
+        )}
       </p>
       <h2 className="text-xl text-foreground/80 mb-8 truncate">{item}</h2>
 
@@ -536,7 +547,7 @@ function ResultScreen({
             <span className="text-sm text-muted-foreground">${price.toFixed(2)}</span>
           ) : null}
         </div>
-        <p className="text-base leading-relaxed text-foreground/85">{explanation}</p>
+        <p className="text-base leading-relaxed text-foreground/85 whitespace-pre-line">{explanation}</p>
 
         {cpu !== null && (
           <p className="mt-5 text-xs text-muted-foreground">
@@ -547,6 +558,15 @@ function ResultScreen({
       </div>
 
       <div className="mt-auto space-y-3">
+        {canDeepen && (
+          <button
+            onClick={onDeepen}
+            className="w-full rounded-2xl bg-card border border-primary/30 text-foreground py-4 text-base font-medium hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-center gap-2"
+          >
+            <Telescope className="h-4 w-4 text-primary" />
+            Go deeper
+          </button>
+        )}
         <button
           onClick={onHistory}
           className={cn(
