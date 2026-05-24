@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, History, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, History, Loader2, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ANSWER_OPTIONS,
@@ -9,10 +9,11 @@ import {
   buildSignals,
   estimateUses,
   scoreAnswers,
+  updateRecord,
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateQuestions, generateExplanation } from "@/lib/ai.functions";
+import { generateQuestions, generateDeepQuestions, generateExplanation } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
