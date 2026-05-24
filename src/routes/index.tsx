@@ -372,7 +372,7 @@ function EntryScreen({
 
 /* ---------------- Preparing ---------------- */
 
-function PreparingScreen({ item }: { item: string }) {
+function PreparingScreen({ item, deep = false }: { item: string; deep?: boolean }) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center text-center fade-up">
       <div className="relative h-16 w-16 mb-6">
@@ -381,8 +381,8 @@ function PreparingScreen({ item }: { item: string }) {
         <span className="absolute inset-5 rounded-full bg-primary" />
       </div>
       <p className="text-foreground/80 flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-primary" />
-        Tailoring questions for {item}…
+        {deep ? <Telescope className="h-4 w-4 text-primary" /> : <Sparkles className="h-4 w-4 text-primary" />}
+        {deep ? `Going deeper on ${item}…` : `Tailoring questions for ${item}…`}
       </p>
     </main>
   );
