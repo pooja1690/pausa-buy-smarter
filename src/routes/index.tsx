@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, ArrowRight, History, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  FIXED_QUESTIONS,
+  ANSWER_OPTIONS,
   addRecord,
   buildSignals,
   estimateUses,
@@ -12,7 +12,7 @@ import {
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateContextualQuestion, generateExplanation } from "@/lib/ai.functions";
+import { generateQuestions, generateExplanation } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,15 +33,23 @@ export const Route = createFileRoute("/")({
   component: PausaApp,
 });
 
-type Step = "entry" | "questions" | "loading" | "result";
+type Step = "entry" | "preparing" | "questions" | "loading" | "result";
+
+const FALLBACK_QUESTIONS = [
+  "Will you use this 30+ times?",
+  "Do you already have something that does this?",
+  "Would you still want this tomorrow?",
+  "Does this align with your current goals?",
+  "Is the price comfortable for you right now?",
+];
 
 function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
+  const [questions, setQuestions] = useState<string[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Choice[]>([]);
-  const [aiQuestion, setAiQuestion] = useState<string | null>(null);
   const [result, setResult] = useState<{
     decision: Decision;
     explanation: string;
@@ -49,37 +57,39 @@ function PausaApp() {
     estUses: number;
   } | null>(null);
 
-  const fetchQuestion = useServerFn(generateContextualQuestion);
+  const fetchQuestions = useServerFn(generateQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
 
-  const totalSteps = 5;
   const navigate = useNavigate();
 
   async function startFlow() {
     const trimmed = item.trim();
     if (!trimmed) return;
-    setStep("questions");
+    setStep("preparing");
     setQIndex(0);
     setAnswers([]);
-    setAiQuestion(null);
-    // Kick off AI question generation in background
-    fetchQuestion({ data: { item: trimmed } })
-      .then((r) => setAiQuestion(r.question))
-      .catch(() => setAiQuestion("Will this meaningfully improve your daily life?"));
+    let qs: string[] = FALLBACK_QUESTIONS;
+    try {
+      const r = await fetchQuestions({ data: { item: trimmed } });
+      if (r.questions?.length === 5) qs = r.questions;
+    } catch {
+      /* keep fallback */
+    }
+    setQuestions(qs);
+    setStep("questions");
   }
 
   async function answer(choice: Choice) {
     const next = [...answers, choice];
     setAnswers(next);
-    if (next.length < totalSteps) {
+    if (next.length < questions.length) {
       setQIndex(qIndex + 1);
       return;
     }
-    // Done
     setStep("loading");
     const { decision } = scoreAnswers(next);
     const priceNum = price ? parseFloat(price) : undefined;
-    const signals = buildSignals(item.trim(), next, priceNum);
+    const signals = buildSignals(item.trim(), questions, next, priceNum);
     let explanation = fallbackExplanation(decision);
     try {
       const r = await fetchExplanation({
@@ -100,6 +110,7 @@ function PausaApp() {
       createdAt: Date.now(),
       boughtAnyway: decision === "BUY" ? null : null,
       estUses,
+      questions,
     });
     setResult({ decision, explanation, id, estUses });
     setStep("result");
@@ -110,8 +121,8 @@ function PausaApp() {
     setItem("");
     setPrice("");
     setAnswers([]);
+    setQuestions([]);
     setQIndex(0);
-    setAiQuestion(null);
     setResult(null);
   }
 
@@ -152,11 +163,13 @@ function PausaApp() {
         />
       )}
 
-      {step === "questions" && (
+      {step === "preparing" && <PreparingScreen item={item.trim()} />}
+
+      {step === "questions" && questions.length > 0 && (
         <QuestionScreen
           index={qIndex}
-          total={totalSteps}
-          aiQuestion={aiQuestion}
+          total={questions.length}
+          prompt={questions[qIndex]}
           onAnswer={answer}
           onBack={goBack}
         />
@@ -250,26 +263,39 @@ function EntryScreen({
   );
 }
 
+/* ---------------- Preparing ---------------- */
+
+function PreparingScreen({ item }: { item: string }) {
+  return (
+    <main className="flex-1 flex flex-col items-center justify-center text-center fade-up">
+      <div className="relative h-16 w-16 mb-6">
+        <span className="absolute inset-0 rounded-full bg-primary/15 animate-ping" />
+        <span className="absolute inset-2 rounded-full bg-primary/30" />
+        <span className="absolute inset-5 rounded-full bg-primary" />
+      </div>
+      <p className="text-foreground/80 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary" />
+        Tailoring questions for {item}…
+      </p>
+    </main>
+  );
+}
+
 /* ---------------- Questions ---------------- */
 
 function QuestionScreen({
   index,
   total,
-  aiQuestion,
+  prompt,
   onAnswer,
   onBack,
 }: {
   index: number;
   total: number;
-  aiQuestion: string | null;
+  prompt: string;
   onAnswer: (c: Choice) => void;
   onBack: () => void;
 }) {
-  const isAiStep = index === 4;
-  const fixed = FIXED_QUESTIONS[index];
-  const prompt = isAiStep ? aiQuestion : fixed?.prompt;
-  const options = isAiStep ? (["Yes", "Maybe", "No"] as const) : fixed!.options;
-
   return (
     <main className="flex-1 flex flex-col fade-up" key={index}>
       <div className="flex items-center gap-3 mb-10">
@@ -295,33 +321,24 @@ function QuestionScreen({
 
       <div className="flex-1 flex flex-col">
         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-1.5">
-          {isAiStep && <Sparkles className="h-3 w-3" />}
+          <Sparkles className="h-3 w-3" />
           Question {index + 1} of {total}
         </p>
 
-        {prompt ? (
-          <h2 className="text-3xl leading-snug mb-12">{prompt}</h2>
-        ) : (
-          <div className="h-24 flex items-center text-muted-foreground gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Thinking of a final question…</span>
-          </div>
-        )}
+        <h2 className="text-3xl leading-snug mb-12">{prompt}</h2>
 
-        {prompt && (
-          <div className="space-y-3 mt-auto">
-            {options.map((opt, i) => (
-              <button
-                key={opt}
-                onClick={() => onAnswer(i as Choice)}
-                className="w-full rounded-2xl bg-card border border-border px-5 py-4 text-left text-base font-medium hover:border-primary/50 hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-between"
-              >
-                <span>{opt}</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="space-y-3 mt-auto">
+          {ANSWER_OPTIONS.map((opt, i) => (
+            <button
+              key={opt}
+              onClick={() => onAnswer(i as Choice)}
+              className="w-full rounded-2xl bg-card border border-border px-5 py-4 text-left text-base font-medium hover:border-primary/50 hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-between"
+            >
+              <span>{opt}</span>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
       </div>
     </main>
   );
@@ -337,7 +354,10 @@ function LoadingScreen() {
         <span className="absolute inset-2 rounded-full bg-primary/30" />
         <span className="absolute inset-5 rounded-full bg-primary" />
       </div>
-      <p className="text-muted-foreground">Taking a breath…</p>
+      <p className="text-muted-foreground flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Taking a breath…
+      </p>
     </main>
   );
 }
