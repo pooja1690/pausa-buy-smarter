@@ -34,14 +34,29 @@ export const Route = createFileRoute("/")({
   component: PausaApp,
 });
 
-type Step = "entry" | "preparing" | "questions" | "loading" | "result";
+type Step =
+  | "entry"
+  | "preparing"
+  | "questions"
+  | "loading"
+  | "result"
+  | "deep-preparing"
+  | "deep-questions"
+  | "deep-loading";
+
+const QUICK_COUNT = 4;
 
 const FALLBACK_QUESTIONS = [
   "Will you use this 30+ times?",
   "Do you already have something that does this?",
   "Would you still want this tomorrow?",
-  "Does this align with your current goals?",
   "Is the price comfortable for you right now?",
+];
+
+const FALLBACK_DEEP = [
+  "Are you buying this to solve a real, current need?",
+  "Could you wait a week and still want it?",
+  "Is there a cheaper alternative you'd be happy with?",
 ];
 
 function PausaApp() {
