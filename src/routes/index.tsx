@@ -455,7 +455,7 @@ function QuestionScreen({
 
 /* ---------------- Loading ---------------- */
 
-function LoadingScreen() {
+function LoadingScreen({ deep = false }: { deep?: boolean }) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center text-center fade-up">
       <div className="relative h-16 w-16 mb-6">
@@ -465,7 +465,7 @@ function LoadingScreen() {
       </div>
       <p className="text-muted-foreground flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Taking a breath…
+        {deep ? "Reflecting deeper…" : "Taking a breath…"}
       </p>
     </main>
   );
