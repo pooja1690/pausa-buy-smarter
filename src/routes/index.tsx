@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, History, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, History, Loader2, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ANSWER_OPTIONS,
@@ -9,10 +9,11 @@ import {
   buildSignals,
   estimateUses,
   scoreAnswers,
+  updateRecord,
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateQuestions, generateExplanation } from "@/lib/ai.functions";
+import { generateQuestions, generateDeepQuestions, generateExplanation } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,14 +34,29 @@ export const Route = createFileRoute("/")({
   component: PausaApp,
 });
 
-type Step = "entry" | "preparing" | "questions" | "loading" | "result";
+type Step =
+  | "entry"
+  | "preparing"
+  | "questions"
+  | "loading"
+  | "result"
+  | "deep-preparing"
+  | "deep-questions"
+  | "deep-loading";
+
+const QUICK_COUNT = 4;
 
 const FALLBACK_QUESTIONS = [
   "Will you use this 30+ times?",
   "Do you already have something that does this?",
   "Would you still want this tomorrow?",
-  "Does this align with your current goals?",
   "Is the price comfortable for you right now?",
+];
+
+const FALLBACK_DEEP = [
+  "Are you buying this to solve a real, current need?",
+  "Could you wait a week and still want it?",
+  "Is there a cheaper alternative you'd be happy with?",
 ];
 
 function PausaApp() {
@@ -50,14 +66,19 @@ function PausaApp() {
   const [questions, setQuestions] = useState<string[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Choice[]>([]);
+  const [deepQuestions, setDeepQuestions] = useState<string[]>([]);
+  const [deepIndex, setDeepIndex] = useState(0);
+  const [deepAnswers, setDeepAnswers] = useState<Choice[]>([]);
   const [result, setResult] = useState<{
     decision: Decision;
     explanation: string;
     id: string;
     estUses: number;
+    deep: boolean;
   } | null>(null);
 
   const fetchQuestions = useServerFn(generateQuestions);
+  const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
 
   const navigate = useNavigate();
@@ -68,10 +89,13 @@ function PausaApp() {
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
+    setDeepQuestions([]);
+    setDeepAnswers([]);
+    setDeepIndex(0);
     let qs: string[] = FALLBACK_QUESTIONS;
     try {
-      const r = await fetchQuestions({ data: { item: trimmed } });
-      if (r.questions?.length === 5) qs = r.questions;
+      const r = await fetchQuestions({ data: { item: trimmed, count: QUICK_COUNT } });
+      if (r.questions?.length === QUICK_COUNT) qs = r.questions;
     } catch {
       /* keep fallback */
     }
@@ -79,17 +103,11 @@ function PausaApp() {
     setStep("questions");
   }
 
-  async function answer(choice: Choice) {
-    const next = [...answers, choice];
-    setAnswers(next);
-    if (next.length < questions.length) {
-      setQIndex(qIndex + 1);
-      return;
-    }
+  async function finalizeQuick(allAnswers: Choice[]) {
     setStep("loading");
-    const { decision } = scoreAnswers(next);
+    const { decision } = scoreAnswers(allAnswers);
     const priceNum = price ? parseFloat(price) : undefined;
-    const signals = buildSignals(item.trim(), questions, next, priceNum);
+    const signals = buildSignals(item.trim(), questions, allAnswers, priceNum);
     let explanation = fallbackExplanation(decision);
     try {
       const r = await fetchExplanation({
@@ -100,7 +118,7 @@ function PausaApp() {
       /* keep fallback */
     }
     const id = crypto.randomUUID();
-    const estUses = estimateUses(next[0]);
+    const estUses = estimateUses(allAnswers[0]);
     addRecord({
       id,
       item: item.trim(),
@@ -108,11 +126,70 @@ function PausaApp() {
       decision,
       explanation,
       createdAt: Date.now(),
-      boughtAnyway: decision === "BUY" ? null : null,
+      boughtAnyway: null,
       estUses,
       questions,
     });
-    setResult({ decision, explanation, id, estUses });
+    setResult({ decision, explanation, id, estUses, deep: false });
+    setStep("result");
+  }
+
+  async function answer(choice: Choice) {
+    const next = [...answers, choice];
+    setAnswers(next);
+    if (next.length < questions.length) {
+      setQIndex(qIndex + 1);
+      return;
+    }
+    await finalizeQuick(next);
+  }
+
+  async function startDeep() {
+    if (!result) return;
+    const remaining = Math.max(1, Math.min(3, 8 - questions.length));
+    setStep("deep-preparing");
+    setDeepIndex(0);
+    setDeepAnswers([]);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const signals = buildSignals(item.trim(), questions, answers, priceNum);
+    let dq: string[] = FALLBACK_DEEP.slice(0, remaining);
+    try {
+      const r = await fetchDeepQuestions({
+        data: { item: item.trim(), decision: result.decision, signals, count: remaining as 1 | 2 | 3 },
+      });
+      if (r.questions?.length === remaining) dq = r.questions;
+    } catch {
+      /* keep fallback */
+    }
+    setDeepQuestions(dq);
+    setStep("deep-questions");
+  }
+
+  async function answerDeep(choice: Choice) {
+    const next = [...deepAnswers, choice];
+    setDeepAnswers(next);
+    if (next.length < deepQuestions.length) {
+      setDeepIndex(deepIndex + 1);
+      return;
+    }
+    if (!result) return;
+    setStep("deep-loading");
+    const allAnswers = [...answers, ...next];
+    const allQuestions = [...questions, ...deepQuestions];
+    const { decision } = scoreAnswers(allAnswers);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const signals = buildSignals(item.trim(), allQuestions, allAnswers, priceNum);
+    let explanation = fallbackExplanation(decision);
+    try {
+      const r = await fetchExplanation({
+        data: { item: item.trim(), decision, signals, deep: true },
+      });
+      if (r.explanation) explanation = r.explanation;
+    } catch {
+      /* keep fallback */
+    }
+    updateRecord(result.id, { decision, explanation, questions: allQuestions });
+    setResult({ ...result, decision, explanation, deep: true });
     setStep("result");
   }
 
@@ -123,6 +200,9 @@ function PausaApp() {
     setAnswers([]);
     setQuestions([]);
     setQIndex(0);
+    setDeepAnswers([]);
+    setDeepQuestions([]);
+    setDeepIndex(0);
     setResult(null);
   }
 
@@ -133,6 +213,15 @@ function PausaApp() {
     }
     setAnswers(answers.slice(0, -1));
     setQIndex(qIndex - 1);
+  }
+
+  function goBackDeep() {
+    if (deepIndex === 0) {
+      setStep("result");
+      return;
+    }
+    setDeepAnswers(deepAnswers.slice(0, -1));
+    setDeepIndex(deepIndex - 1);
   }
 
   return (
@@ -177,6 +266,21 @@ function PausaApp() {
 
       {step === "loading" && <LoadingScreen />}
 
+      {step === "deep-preparing" && <PreparingScreen item={item.trim()} deep />}
+
+      {step === "deep-questions" && deepQuestions.length > 0 && (
+        <QuestionScreen
+          index={deepIndex}
+          total={deepQuestions.length}
+          prompt={deepQuestions[deepIndex]}
+          onAnswer={answerDeep}
+          onBack={goBackDeep}
+          deep
+        />
+      )}
+
+      {step === "deep-loading" && <LoadingScreen deep />}
+
       {step === "result" && result && (
         <ResultScreen
           item={item}
@@ -184,6 +288,9 @@ function PausaApp() {
           decision={result.decision}
           explanation={result.explanation}
           estUses={result.estUses}
+          deep={result.deep}
+          canDeepen={!result.deep && questions.length < 8}
+          onDeepen={startDeep}
           onReset={reset}
           onHistory={() => navigate({ to: "/history" })}
         />
@@ -257,7 +364,7 @@ function EntryScreen({
       </form>
 
       <p className="text-xs text-muted-foreground text-center mt-8 leading-relaxed">
-        Five quick taps. A calm answer. Under 10 seconds.
+        A few quick taps. A calm answer. Under 10 seconds.
       </p>
     </main>
   );
@@ -265,7 +372,7 @@ function EntryScreen({
 
 /* ---------------- Preparing ---------------- */
 
-function PreparingScreen({ item }: { item: string }) {
+function PreparingScreen({ item, deep = false }: { item: string; deep?: boolean }) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center text-center fade-up">
       <div className="relative h-16 w-16 mb-6">
@@ -274,8 +381,8 @@ function PreparingScreen({ item }: { item: string }) {
         <span className="absolute inset-5 rounded-full bg-primary" />
       </div>
       <p className="text-foreground/80 flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-primary" />
-        Tailoring questions for {item}…
+        {deep ? <Telescope className="h-4 w-4 text-primary" /> : <Sparkles className="h-4 w-4 text-primary" />}
+        {deep ? `Going deeper on ${item}…` : `Tailoring questions for ${item}…`}
       </p>
     </main>
   );
@@ -289,15 +396,17 @@ function QuestionScreen({
   prompt,
   onAnswer,
   onBack,
+  deep = false,
 }: {
   index: number;
   total: number;
   prompt: string;
   onAnswer: (c: Choice) => void;
   onBack: () => void;
+  deep?: boolean;
 }) {
   return (
-    <main className="flex-1 flex flex-col fade-up" key={index}>
+    <main className="flex-1 flex flex-col fade-up" key={`${deep ? "d" : "q"}-${index}`}>
       <div className="flex items-center gap-3 mb-10">
         <button
           onClick={onBack}
@@ -321,8 +430,8 @@ function QuestionScreen({
 
       <div className="flex-1 flex flex-col">
         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-1.5">
-          <Sparkles className="h-3 w-3" />
-          Question {index + 1} of {total}
+          {deep ? <Telescope className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+          {deep ? "Deep" : "Question"} {index + 1} of {total}
         </p>
 
         <h2 className="text-3xl leading-snug mb-12">{prompt}</h2>
@@ -346,7 +455,7 @@ function QuestionScreen({
 
 /* ---------------- Loading ---------------- */
 
-function LoadingScreen() {
+function LoadingScreen({ deep = false }: { deep?: boolean }) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center text-center fade-up">
       <div className="relative h-16 w-16 mb-6">
@@ -356,7 +465,7 @@ function LoadingScreen() {
       </div>
       <p className="text-muted-foreground flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Taking a breath…
+        {deep ? "Reflecting deeper…" : "Taking a breath…"}
       </p>
     </main>
   );
@@ -397,6 +506,9 @@ function ResultScreen({
   decision,
   explanation,
   estUses,
+  deep,
+  canDeepen,
+  onDeepen,
   onReset,
   onHistory,
 }: {
@@ -405,6 +517,9 @@ function ResultScreen({
   decision: Decision;
   explanation: string;
   estUses: number;
+  deep: boolean;
+  canDeepen: boolean;
+  onDeepen: () => void;
   onReset: () => void;
   onHistory: () => void;
 }) {
@@ -413,8 +528,13 @@ function ResultScreen({
 
   return (
     <main className="flex-1 flex flex-col fade-up">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2 flex items-center gap-1.5">
         Your pausa
+        {deep && (
+          <span className="inline-flex items-center gap-1 text-primary normal-case tracking-normal">
+            <Telescope className="h-3 w-3" /> deep
+          </span>
+        )}
       </p>
       <h2 className="text-xl text-foreground/80 mb-8 truncate">{item}</h2>
 
@@ -427,7 +547,7 @@ function ResultScreen({
             <span className="text-sm text-muted-foreground">${price.toFixed(2)}</span>
           ) : null}
         </div>
-        <p className="text-base leading-relaxed text-foreground/85">{explanation}</p>
+        <p className="text-base leading-relaxed text-foreground/85 whitespace-pre-line">{explanation}</p>
 
         {cpu !== null && (
           <p className="mt-5 text-xs text-muted-foreground">
@@ -438,6 +558,15 @@ function ResultScreen({
       </div>
 
       <div className="mt-auto space-y-3">
+        {canDeepen && (
+          <button
+            onClick={onDeepen}
+            className="w-full rounded-2xl bg-card border border-primary/30 text-foreground py-4 text-base font-medium hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-center gap-2"
+          >
+            <Telescope className="h-4 w-4 text-primary" />
+            Go deeper
+          </button>
+        )}
         <button
           onClick={onHistory}
           className={cn(
