@@ -1,4 +1,4 @@
-export type Choice = 0 | 1 | 2; // 0 = best, 2 = worst
+export type Choice = 0 | 1 | 2;
 export type Decision = "BUY" | "WAIT" | "SKIP";
 
 export interface DecisionRecord {
@@ -8,8 +8,9 @@ export interface DecisionRecord {
   decision: Decision;
   explanation: string;
   createdAt: number;
-  boughtAnyway?: boolean | null; // for WAIT/SKIP
+  boughtAnyway?: boolean | null;
   estUses?: number;
+  questions?: string[];
 }
 
 const KEY = "pausa.history.v1";
@@ -44,51 +45,30 @@ export function updateRecord(id: string, patch: Partial<DecisionRecord>) {
   saveHistory(all);
 }
 
-// Each answer is a Choice 0/1/2. Lower index = more positive signal.
-// Score sums: 0 best (lots of "yes I'll use, aligned"), 10 worst.
-// Q2 (already own similar) is inverted: 0 ("No") is positive.
-// We normalize so that 0 = positive answer for all questions before storing.
+export const ANSWER_OPTIONS = ["Yes", "Maybe", "No"] as const;
+
 export function scoreAnswers(answers: Choice[]): { score: number; decision: Decision } {
-  // Each answer contributes 0, 1, or 2. Total range 0..10 for 5 questions.
   const total = answers.reduce<number>((s, a) => s + a, 0);
   let decision: Decision;
-  if (total <= 3) decision = "BUY";
-  else if (total <= 6) decision = "WAIT";
+  const max = answers.length * 2;
+  const ratio = total / max;
+  if (ratio <= 0.3) decision = "BUY";
+  else if (ratio <= 0.6) decision = "WAIT";
   else decision = "SKIP";
   return { score: total, decision };
 }
 
-export const FIXED_QUESTIONS = [
-  {
-    prompt: "Will you use this 30+ times?",
-    options: ["Yes", "Maybe", "No"], // 0,1,2
-  },
-  {
-    prompt: "Do you already own something similar?",
-    options: ["No", "Kind of", "Yes"], // 0,1,2 (No is positive)
-  },
-  {
-    prompt: "Would you still want this tomorrow?",
-    options: ["Yes", "Not sure", "Probably not"],
-  },
-  {
-    prompt: "Does this align with your current goals?",
-    options: ["Yes", "Neutral", "No"],
-  },
-] as const;
-
 export function estimateUses(answer0: Choice): number {
-  // Q1 mapping: Yes=40, Maybe=15, No=5
   return answer0 === 0 ? 40 : answer0 === 1 ? 15 : 5;
 }
 
-export function buildSignals(item: string, answers: Choice[], price?: number): string[] {
-  const labels = [
-    `Usage 30+: ${FIXED_QUESTIONS[0].options[answers[0]]}`,
-    `Owns similar: ${FIXED_QUESTIONS[1].options[answers[1]]}`,
-    `Want tomorrow: ${FIXED_QUESTIONS[2].options[answers[2]]}`,
-    `Goal aligned: ${FIXED_QUESTIONS[3].options[answers[3]]}`,
-  ];
+export function buildSignals(
+  item: string,
+  questions: string[],
+  answers: Choice[],
+  price?: number,
+): string[] {
+  const labels = questions.map((q, i) => `${q} → ${ANSWER_OPTIONS[answers[i]]}`);
   if (price && price > 0) labels.push(`Price: $${price}`);
   labels.push(`Item: ${item}`);
   return labels;
