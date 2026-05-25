@@ -18,13 +18,13 @@ import { generateQuestions, generateDeepQuestions, generateExplanation } from "@
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Pausa — A calm sanity check before you buy" },
+      { title: "PAUSA — A calm sanity check before you buy" },
       {
         name: "description",
         content:
-          "Pausa asks a few quick questions and tells you to buy, wait, or skip. A mindful pause before every purchase.",
+          "PAUSA asks a few quick questions and tells you to buy, wait, or skip. A mindful pause before every purchase.",
       },
-      { property: "og:title", content: "Pausa — Buy, Wait, or Skip" },
+      { property: "og:title", content: "PAUSA — Buy, Wait, or Skip" },
       {
         property: "og:description",
         content: "A calm 10-second sanity check before any purchase.",
@@ -242,7 +242,7 @@ function PausaApp() {
           <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
             <span className="h-2 w-2 rounded-full bg-primary" />
           </div>
-          <span className="font-display text-lg font-semibold">Pausa</span>
+          <span className="font-display text-lg font-semibold">PAUSA</span>
         </Link>
         <Link
           to="/history"
@@ -368,7 +368,7 @@ function EntryScreen({
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
       <p className="text-[11px] tracking-label text-muted-foreground mb-4">
-        Take a pausa
+        Take a PAUSA
       </p>
       <h1 className="text-4xl leading-tight mb-10 font-semibold">What are you about to buy?</h1>
 

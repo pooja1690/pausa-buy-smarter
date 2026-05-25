@@ -75,11 +75,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
-      { title: "Pausa — A calm sanity check before you buy" },
+      { title: "PAUSA — A calm sanity check before you buy" },
       {
         name: "description",
         content:
-          "Pausa asks five quick questions and tells you to buy, wait, or skip.",
+          "PAUSA asks five quick questions and tells you to buy, wait, or skip.",
       },
       { name: "theme-color", content: "#f9f7f3" },
     ],
