@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Pausa asks five quick questions and tells you to buy, wait, or skip.",
       },
-      { name: "theme-color", content: "#f5f4ee" },
+      { name: "theme-color", content: "#f9f7f3" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -93,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap",
       },
     ],
   }),

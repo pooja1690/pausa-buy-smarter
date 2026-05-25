@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, History, Loader2, Sparkles, Telescope } from "lucide-react";
+import { ArrowLeft, History, Loader2, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ANSWER_OPTIONS,
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Pausa asks five quick questions and tells you to buy, wait, or skip. A mindful pause before every purchase.",
+          "Pausa asks a few quick questions and tells you to buy, wait, or skip. A mindful pause before every purchase.",
       },
       { property: "og:title", content: "Pausa — Buy, Wait, or Skip" },
       {
@@ -44,23 +44,26 @@ type Step =
   | "deep-questions"
   | "deep-loading";
 
+type Mode = "quick" | "deep";
+
 const QUICK_COUNT = 4;
 
 const FALLBACK_QUESTIONS = [
-  "Will you use this 30+ times?",
-  "Do you already have something that does this?",
+  "Will you use this often?",
+  "Do you already have something similar?",
   "Would you still want this tomorrow?",
-  "Is the price comfortable for you right now?",
+  "Is the price comfortable right now?",
 ];
 
 const FALLBACK_DEEP = [
   "Are you buying this to solve a real, current need?",
   "Could you wait a week and still want it?",
-  "Is there a cheaper alternative you'd be happy with?",
+  "Is there a gentler alternative you'd be happy with?",
 ];
 
 function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
+  const [mode, setMode] = useState<Mode>("quick");
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
@@ -132,6 +135,10 @@ function PausaApp() {
     });
     setResult({ decision, explanation, id, estUses, deep: false });
     setStep("result");
+    if (mode === "deep") {
+      // auto-trigger deep follow-up
+      setTimeout(() => startDeepWith({ decision, explanation, id, estUses, deep: false }), 250);
+    }
   }
 
   async function answer(choice: Choice) {
@@ -144,8 +151,7 @@ function PausaApp() {
     await finalizeQuick(next);
   }
 
-  async function startDeep() {
-    if (!result) return;
+  async function startDeepWith(r: NonNullable<typeof result>) {
     const remaining = Math.max(1, Math.min(3, 8 - questions.length));
     setStep("deep-preparing");
     setDeepIndex(0);
@@ -154,15 +160,20 @@ function PausaApp() {
     const signals = buildSignals(item.trim(), questions, answers, priceNum);
     let dq: string[] = FALLBACK_DEEP.slice(0, remaining);
     try {
-      const r = await fetchDeepQuestions({
-        data: { item: item.trim(), decision: result.decision, signals, count: remaining as 1 | 2 | 3 },
+      const res = await fetchDeepQuestions({
+        data: { item: item.trim(), decision: r.decision, signals, count: remaining as 1 | 2 | 3 },
       });
-      if (r.questions?.length === remaining) dq = r.questions;
+      if (res.questions?.length === remaining) dq = res.questions;
     } catch {
       /* keep fallback */
     }
     setDeepQuestions(dq);
     setStep("deep-questions");
+  }
+
+  async function startDeep() {
+    if (!result) return;
+    await startDeepWith(result);
   }
 
   async function answerDeep(choice: Choice) {
@@ -226,16 +237,16 @@ function PausaApp() {
 
   return (
     <div className="pausa-screen">
-      <header className="flex items-center justify-between pb-6">
+      <header className="flex items-center justify-between pb-8">
         <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
           <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
             <span className="h-2 w-2 rounded-full bg-primary" />
           </div>
-          <span className="font-display text-lg">Pausa</span>
+          <span className="font-display text-lg font-semibold">Pausa</span>
         </Link>
         <Link
           to="/history"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
         >
           <History className="h-4 w-4" />
           History
@@ -246,8 +257,10 @@ function PausaApp() {
         <EntryScreen
           item={item}
           price={price}
+          mode={mode}
           setItem={setItem}
           setPrice={setPrice}
+          setMode={setMode}
           onStart={startFlow}
         />
       )}
@@ -300,9 +313,37 @@ function PausaApp() {
 }
 
 function fallbackExplanation(d: Decision): string {
-  if (d === "BUY") return "High usage and aligned with your goals.";
-  if (d === "WAIT") return "This looks somewhat impulsive. Try waiting 24 hours.";
-  return "You already own similar items and may not use this enough.";
+  if (d === "BUY") return "This sounds genuinely useful and aligned with your life right now.";
+  if (d === "WAIT") return "There's a little hesitation here. Try waiting 24 hours and see how it feels.";
+  return "You already have what you need. This one can pass gently.";
+}
+
+/* ---------------- Toggle ---------------- */
+
+function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+  return (
+    <div className="relative grid grid-cols-2 p-1 rounded-full bg-[var(--border)]">
+      <span
+        className={cn(
+          "absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-primary transition-transform duration-300 ease-out",
+          mode === "deep" && "translate-x-[calc(100%+0.0rem)]",
+        )}
+      />
+      {(["quick", "deep"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => setMode(m)}
+          className={cn(
+            "relative z-10 py-2.5 text-sm font-medium rounded-full transition-colors",
+            mode === m ? "text-white" : "text-foreground",
+          )}
+        >
+          {m === "quick" ? "Quick" : "Deep"}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /* ---------------- Entry ---------------- */
@@ -310,39 +351,43 @@ function fallbackExplanation(d: Decision): string {
 function EntryScreen({
   item,
   price,
+  mode,
   setItem,
   setPrice,
+  setMode,
   onStart,
 }: {
   item: string;
   price: string;
+  mode: Mode;
   setItem: (s: string) => void;
   setPrice: (s: string) => void;
+  setMode: (m: Mode) => void;
   onStart: () => void;
 }) {
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
-      <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+      <p className="text-[11px] tracking-label text-muted-foreground mb-4">
         Take a pausa
       </p>
-      <h1 className="text-4xl leading-tight mb-8">What are you about to buy?</h1>
+      <h1 className="text-4xl leading-tight mb-10 font-semibold">What are you about to buy?</h1>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onStart();
         }}
-        className="space-y-3"
+        className="space-y-4"
       >
         <input
           autoFocus
           value={item}
           onChange={(e) => setItem(e.target.value)}
           placeholder="e.g. wireless headphones"
-          className="w-full rounded-2xl bg-card border border-border px-5 py-4 text-base outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
+          className="w-full rounded-[16px] bg-white border border-border px-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
         />
         <div className="relative">
-          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground">
+          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-border">
             $
           </span>
           <input
@@ -350,22 +395,28 @@ function EntryScreen({
             value={price}
             onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ""))}
             placeholder="Price (optional)"
-            className="w-full rounded-2xl bg-card border border-border pl-9 pr-5 py-4 text-base outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
+            className="w-full rounded-[16px] bg-white border border-border pl-9 pr-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
           />
+        </div>
+
+        <div className="pt-2">
+          <p className="text-[11px] tracking-label text-muted-foreground mb-3">Pace</p>
+          <ModeToggle mode={mode} setMode={setMode} />
+          <p className="text-xs font-light text-muted-foreground mt-2 px-1">
+            {mode === "quick"
+              ? "A few quick taps. Under 10 seconds."
+              : "A longer, more reflective check-in."}
+          </p>
         </div>
 
         <button
           type="submit"
           disabled={!item.trim()}
-          className="mt-3 w-full rounded-2xl bg-primary text-primary-foreground py-4 text-base font-medium shadow-sm hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100"
+          className="mt-4 w-full rounded-full bg-primary text-primary-foreground py-4 text-base font-medium hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100"
         >
           Help me decide
         </button>
       </form>
-
-      <p className="text-xs text-muted-foreground text-center mt-8 leading-relaxed">
-        A few quick taps. A calm answer. Under 10 seconds.
-      </p>
     </main>
   );
 }
@@ -380,7 +431,7 @@ function PreparingScreen({ item, deep = false }: { item: string; deep?: boolean 
         <span className="absolute inset-2 rounded-full bg-primary/30" />
         <span className="absolute inset-5 rounded-full bg-primary" />
       </div>
-      <p className="text-foreground/80 flex items-center gap-2">
+      <p className="text-foreground/80 flex items-center gap-2 font-light">
         {deep ? <Telescope className="h-4 w-4 text-primary" /> : <Sparkles className="h-4 w-4 text-primary" />}
         {deep ? `Going deeper on ${item}…` : `Tailoring questions for ${item}…`}
       </p>
@@ -389,6 +440,12 @@ function PreparingScreen({ item, deep = false }: { item: string; deep?: boolean 
 }
 
 /* ---------------- Questions ---------------- */
+
+const answerStyles: Record<number, string> = {
+  0: "bg-primary text-white", // Yes
+  1: "bg-wait text-foreground", // Maybe
+  2: "bg-skip text-foreground", // No
+};
 
 function QuestionScreen({
   index,
@@ -407,44 +464,47 @@ function QuestionScreen({
 }) {
   return (
     <main className="flex-1 flex flex-col fade-up" key={`${deep ? "d" : "q"}-${index}`}>
-      <div className="flex items-center gap-3 mb-10">
+      <div className="flex items-center gap-3 mb-12">
         <button
           onClick={onBack}
-          className="h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground"
+          className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground hover:text-foreground"
           aria-label="Back"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex-1 flex gap-1.5">
+        <div className="flex-1 flex items-center justify-center gap-2">
           {Array.from({ length: total }).map((_, i) => (
-            <div
+            <span
               key={i}
               className={cn(
-                "h-1 flex-1 rounded-full transition-colors",
+                "h-2 w-2 rounded-full transition-colors",
                 i <= index ? "bg-primary" : "bg-border",
               )}
             />
           ))}
         </div>
+        <div className="h-9 w-9" />
       </div>
 
       <div className="flex-1 flex flex-col">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-1.5">
-          {deep ? <Telescope className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+        <p className="text-[11px] tracking-label text-muted-foreground mb-4 flex items-center gap-1.5">
+          {deep ? <Telescope className="h-3 w-3" /> : null}
           {deep ? "Deep" : "Question"} {index + 1} of {total}
         </p>
 
-        <h2 className="text-3xl leading-snug mb-12">{prompt}</h2>
+        <h2 className="text-3xl leading-snug mb-14 font-regular text-foreground">{prompt}</h2>
 
         <div className="space-y-3 mt-auto">
           {ANSWER_OPTIONS.map((opt, i) => (
             <button
               key={opt}
               onClick={() => onAnswer(i as Choice)}
-              className="w-full rounded-2xl bg-card border border-border px-5 py-4 text-left text-base font-medium hover:border-primary/50 hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-between"
+              className={cn(
+                "w-full rounded-[16px] px-5 py-[18px] text-center text-base font-medium active:scale-[0.99] transition",
+                answerStyles[i],
+              )}
             >
-              <span>{opt}</span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              {opt}
             </button>
           ))}
         </div>
@@ -463,7 +523,7 @@ function LoadingScreen({ deep = false }: { deep?: boolean }) {
         <span className="absolute inset-2 rounded-full bg-primary/30" />
         <span className="absolute inset-5 rounded-full bg-primary" />
       </div>
-      <p className="text-muted-foreground flex items-center gap-2">
+      <p className="text-muted-foreground flex items-center gap-2 font-light">
         <Loader2 className="h-4 w-4 animate-spin" />
         {deep ? "Reflecting deeper…" : "Taking a breath…"}
       </p>
@@ -475,28 +535,26 @@ function LoadingScreen({ deep = false }: { deep?: boolean }) {
 
 const decisionMeta: Record<
   Decision,
-  { label: string; soft: string; on: string; cta: string; ring: string }
+  { label: string; bg: string; text: string; cta: string; strike?: boolean }
 > = {
   BUY: {
     label: "BUY",
-    soft: "bg-buy-soft",
-    on: "bg-buy text-buy-foreground",
-    cta: "Proceed confidently",
-    ring: "text-buy",
+    bg: "bg-buy",
+    text: "text-white",
+    cta: "Proceed gently",
   },
   WAIT: {
     label: "WAIT",
-    soft: "bg-wait-soft",
-    on: "bg-wait text-wait-foreground",
+    bg: "bg-wait",
+    text: "text-foreground",
     cta: "Remind me tomorrow",
-    ring: "text-wait",
   },
   SKIP: {
     label: "SKIP",
-    soft: "bg-skip-soft",
-    on: "bg-skip text-skip-foreground",
-    cta: "Save decision",
-    ring: "text-skip",
+    bg: "bg-skip",
+    text: "text-foreground",
+    cta: "Save this decision",
+    strike: true,
   },
 };
 
@@ -525,34 +583,47 @@ function ResultScreen({
 }) {
   const meta = decisionMeta[decision];
   const cpu = price && estUses ? price / estUses : null;
+  const ctaStyle =
+    decision === "BUY"
+      ? "bg-primary text-white"
+      : decision === "WAIT"
+        ? "bg-wait text-foreground"
+        : "bg-foreground text-white";
 
   return (
     <main className="flex-1 flex flex-col fade-up">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2 flex items-center gap-1.5">
+      <p className="text-[11px] tracking-label text-muted-foreground mb-3 flex items-center gap-2">
         Your pausa
         {deep && (
-          <span className="inline-flex items-center gap-1 text-primary normal-case tracking-normal">
+          <span className="inline-flex items-center gap-1 text-primary normal-case tracking-normal font-light">
             <Telescope className="h-3 w-3" /> deep
           </span>
         )}
       </p>
-      <h2 className="text-xl text-foreground/80 mb-8 truncate">{item}</h2>
+      <h2 className="text-xl text-foreground/80 mb-8 truncate font-regular">{item}</h2>
 
-      <div className={cn("rounded-3xl p-8 mb-6", meta.soft)}>
-        <div className="flex items-baseline justify-between mb-4">
-          <span className={cn("font-display text-6xl tracking-tight", meta.ring)}>
+      <div className={cn("rounded-[24px] p-8 mb-6", meta.bg, meta.text)}>
+        <div className="flex items-baseline justify-between mb-5">
+          <span
+            className={cn(
+              "font-display text-6xl font-semibold tracking-tight",
+              meta.strike && "line-through decoration-2 decoration-foreground/40",
+            )}
+          >
             {meta.label}
           </span>
           {price ? (
-            <span className="text-sm text-muted-foreground">${price.toFixed(2)}</span>
+            <span className="text-sm font-light opacity-80">${price.toFixed(2)}</span>
           ) : null}
         </div>
-        <p className="text-base leading-relaxed text-foreground/85 whitespace-pre-line">{explanation}</p>
+        <p className="text-base leading-relaxed font-regular whitespace-pre-line opacity-95">
+          {explanation}
+        </p>
 
         {cpu !== null && (
-          <p className="mt-5 text-xs text-muted-foreground">
-            Est. cost per use: <span className="text-foreground">${cpu.toFixed(2)}</span>{" "}
-            <span className="opacity-60">· based on {estUses} uses</span>
+          <p className="mt-6 text-xs font-light opacity-75">
+            Est. cost per use: <span className="font-medium">${cpu.toFixed(2)}</span>
+            <span className="opacity-70"> · based on {estUses} uses</span>
           </p>
         )}
       </div>
@@ -561,7 +632,7 @@ function ResultScreen({
         {canDeepen && (
           <button
             onClick={onDeepen}
-            className="w-full rounded-2xl bg-card border border-primary/30 text-foreground py-4 text-base font-medium hover:bg-primary-soft/40 active:scale-[0.99] transition flex items-center justify-center gap-2"
+            className="w-full rounded-full bg-white border border-border text-foreground py-4 text-base font-medium hover:border-primary/40 active:scale-[0.99] transition flex items-center justify-center gap-2"
           >
             <Telescope className="h-4 w-4 text-primary" />
             Go deeper
@@ -570,15 +641,15 @@ function ResultScreen({
         <button
           onClick={onHistory}
           className={cn(
-            "w-full rounded-2xl py-4 text-base font-medium shadow-sm active:scale-[0.99] transition",
-            meta.on,
+            "w-full rounded-full py-4 text-base font-medium active:scale-[0.99] transition",
+            ctaStyle,
           )}
         >
           {meta.cta}
         </button>
         <button
           onClick={onReset}
-          className="w-full rounded-2xl bg-card border border-border py-4 text-base font-medium text-foreground hover:bg-muted transition"
+          className="w-full rounded-full bg-transparent border border-border py-4 text-base font-light text-foreground hover:bg-white/50 transition"
         >
           Decide on something else
         </button>

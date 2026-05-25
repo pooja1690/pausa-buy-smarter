@@ -38,46 +38,46 @@
   --color-skip-foreground: var(--skip-foreground);
   --color-skip-soft: var(--skip-soft);
 
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
   --radius: 1rem;
 
-  /* Calm neutral background, slight warmth */
-  --background: oklch(0.985 0.005 95);
-  --foreground: oklch(0.22 0.02 260);
+  /* Warm off-white background */
+  --background: #f9f7f3;
+  --foreground: #44413c;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 260);
+  --card: #ffffff;
+  --card-foreground: #44413c;
 
-  --muted: oklch(0.96 0.005 250);
-  --muted-foreground: oklch(0.5 0.02 260);
+  --muted: #efeae3;
+  --muted-foreground: #8a8378;
 
-  --border: oklch(0.92 0.008 250);
-  --input: oklch(0.92 0.008 250);
-  --ring: oklch(0.7 0.1 240);
+  --border: #d8cfc4;
+  --input: #d8cfc4;
+  --ring: #55614b;
 
-  /* Soft blue primary */
-  --primary: oklch(0.62 0.13 245);
-  --primary-foreground: oklch(0.99 0 0);
-  --primary-soft: oklch(0.95 0.03 245);
+  /* Forest green primary */
+  --primary: #55614b;
+  --primary-foreground: #ffffff;
+  --primary-soft: #e6e8de;
 
-  /* BUY — green */
-  --buy: oklch(0.68 0.13 155);
-  --buy-foreground: oklch(0.99 0 0);
-  --buy-soft: oklch(0.95 0.04 155);
+  /* BUY — forest green */
+  --buy: #55614b;
+  --buy-foreground: #ffffff;
+  --buy-soft: #e6e8de;
 
-  /* WAIT — amber */
-  --wait: oklch(0.78 0.13 80);
-  --wait-foreground: oklch(0.25 0.05 70);
-  --wait-soft: oklch(0.96 0.04 85);
+  /* WAIT — warm blush */
+  --wait: #DAB8A2;
+  --wait-foreground: #44413c;
+  --wait-soft: #f1e3d7;
 
-  /* SKIP — red */
-  --skip: oklch(0.65 0.16 25);
-  --skip-foreground: oklch(0.99 0 0);
-  --skip-soft: oklch(0.96 0.03 25);
+  /* SKIP — warm gray */
+  --skip: #d8cfc4;
+  --skip-foreground: #44413c;
+  --skip-soft: #ece6dd;
 }
 
 @layer base {
@@ -91,18 +91,23 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-weight: 400;
     -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3 {
     font-family: var(--font-display);
-    font-weight: 500;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  input, button {
+    font-family: var(--font-sans);
   }
 }
 
 @layer utilities {
   .pausa-screen {
     @apply min-h-dvh w-full max-w-md mx-auto px-6 pt-10 pb-8 flex flex-col;
+    background-color: var(--color-background);
   }
   .fade-up {
     animation: fadeUp 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -110,5 +115,14 @@
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  .font-light { font-weight: 300; }
+  .font-regular { font-weight: 400; }
+  .font-medium { font-weight: 500; }
+  .font-semibold { font-weight: 600; }
+  .tracking-label {
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 300;
   }
 }
