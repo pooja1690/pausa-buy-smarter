@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowLeft, History, Loader2, Sparkles, Telescope } from "lucide-react";
+import { ArrowLeft, History, Loader2, Pause, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ANSWER_OPTIONS,
@@ -240,7 +240,7 @@ function PausaApp() {
       <header className="flex items-center justify-between pb-8">
         <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
           <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
-            <span className="h-2 w-2 rounded-full bg-primary" />
+            <Pause className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
           </div>
           <span className="font-display text-lg font-semibold">PAUSA</span>
         </Link>
