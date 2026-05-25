@@ -7,8 +7,8 @@ import { loadHistory, updateRecord, type DecisionRecord } from "@/lib/pausa";
 export const Route = createFileRoute("/history")({
   head: () => ({
     meta: [
-      { title: "History — Pausa" },
-      { name: "description", content: "Your past Pausa decisions." },
+      { title: "History — PAUSA" },
+      { name: "description", content: "Your past PAUSA decisions." },
     ],
   }),
   component: HistoryPage,
@@ -155,7 +155,7 @@ function EmptyState() {
         to="/"
         className="mt-6 rounded-full bg-primary text-white px-6 py-3 text-sm font-medium"
       >
-        Take a pausa
+        Take a PAUSA
       </Link>
     </div>
   );
