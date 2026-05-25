@@ -75,13 +75,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
-      { title: "PAUSA — A calm sanity check before you buy" },
+      { title: "PAUSA — Buy Smarter" },
       {
         name: "description",
         content:
           "PAUSA asks five quick questions and tells you to buy, wait, or skip.",
       },
       { name: "theme-color", content: "#f9f7f3" },
+      { property: "og:title", content: "PAUSA — Buy Smarter" },
+      { name: "twitter:title", content: "PAUSA — Buy Smarter" },
+      { name: "description", content: "PAUSA helps users make informed purchasing decisions with a quick, guided process." },
+      { property: "og:description", content: "PAUSA helps users make informed purchasing decisions with a quick, guided process." },
+      { name: "twitter:description", content: "PAUSA helps users make informed purchasing decisions with a quick, guided process." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/a547d7d5-2f38-45be-a6b3-0cb3a5970104/id-preview-d3629470--1ac88ab5-f229-49b9-8991-1cbfd6af8934.lovable.app-1779739917987.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/a547d7d5-2f38-45be-a6b3-0cb3a5970104/id-preview-d3629470--1ac88ab5-f229-49b9-8991-1cbfd6af8934.lovable.app-1779739917987.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
