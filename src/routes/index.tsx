@@ -297,8 +297,6 @@ function PausaApp() {
           explanation={result.explanation}
           estUses={result.estUses}
           deep={result.deep}
-          canDeepen={!result.deep && questions.length < 8}
-          onDeepen={startDeep}
           onReset={reset}
           onHistory={() => navigate({ to: "/history" })}
           onInvest={() => setStep("invest")}
@@ -560,8 +558,6 @@ function ResultScreen({
   explanation,
   estUses,
   deep,
-  canDeepen,
-  onDeepen,
   onReset,
   onHistory,
   onInvest,
@@ -572,8 +568,6 @@ function ResultScreen({
   explanation: string;
   estUses: number;
   deep: boolean;
-  canDeepen: boolean;
-  onDeepen: () => void;
   onReset: () => void;
   onHistory: () => void;
   onInvest: () => void;
@@ -626,15 +620,6 @@ function ResultScreen({
       </div>
 
       <div className="mt-auto space-y-3">
-        {canDeepen && (
-          <button
-            onClick={onDeepen}
-            className="w-full rounded-full bg-white border border-border text-foreground py-4 text-base font-medium hover:border-primary/40 active:scale-[0.99] transition flex items-center justify-center gap-2"
-          >
-            <Telescope className="h-4 w-4 text-primary" />
-            Go deeper
-          </button>
-        )}
         <button
           onClick={onHistory}
           className={cn(
