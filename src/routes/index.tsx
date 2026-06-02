@@ -63,7 +63,7 @@ const FALLBACK_DEEP = [
 
 function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
-  const [mode, setMode] = useState<Mode>("quick");
+  
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
