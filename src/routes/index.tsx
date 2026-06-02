@@ -564,6 +564,7 @@ function ResultScreen({
   onDeepen,
   onReset,
   onHistory,
+  onInvest,
 }: {
   item: string;
   price?: number;
@@ -575,6 +576,7 @@ function ResultScreen({
   onDeepen: () => void;
   onReset: () => void;
   onHistory: () => void;
+  onInvest: () => void;
 }) {
   const meta = decisionMeta[decision];
   const cpu = price && estUses ? price / estUses : null;
