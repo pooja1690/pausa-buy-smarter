@@ -301,6 +301,15 @@ function PausaApp() {
           onDeepen={startDeep}
           onReset={reset}
           onHistory={() => navigate({ to: "/history" })}
+          onInvest={() => setStep("invest")}
+        />
+      )}
+
+      {step === "invest" && price && (
+        <InvestScreen
+          item={item.trim()}
+          price={parseFloat(price)}
+          onBack={() => setStep("result")}
         />
       )}
     </div>
