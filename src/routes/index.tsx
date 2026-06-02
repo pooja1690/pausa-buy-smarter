@@ -297,8 +297,6 @@ function PausaApp() {
           explanation={result.explanation}
           estUses={result.estUses}
           deep={result.deep}
-          canDeepen={!result.deep && questions.length < 8}
-          onDeepen={startDeep}
           onReset={reset}
           onHistory={() => navigate({ to: "/history" })}
           onInvest={() => setStep("invest")}
