@@ -644,12 +644,104 @@ function ResultScreen({
         >
           {meta.cta}
         </button>
+        {price && decision !== "BUY" && (
+          <button
+            onClick={onInvest}
+            className="w-full rounded-full bg-white border-2 py-4 text-base font-medium active:scale-[0.99] transition"
+            style={{ borderColor: "#55614b", color: "#55614b" }}
+          >
+            Put it to work?
+          </button>
+        )}
         <button
           onClick={onReset}
           className="w-full rounded-full bg-transparent border border-border py-4 text-base font-light text-foreground hover:bg-white/50 transition"
         >
           Decide on something else
         </button>
+      </div>
+    </main>
+  );
+}
+
+/* ---------------- Invest ---------------- */
+
+function formatMoney(n: number): string {
+  return "$" + Math.round(n).toLocaleString("en-US");
+}
+
+function InvestScreen({
+  item,
+  price,
+  onBack,
+}: {
+  item: string;
+  price: number;
+  onBack: () => void;
+}) {
+  const y5 = price * Math.pow(1.1, 5);
+  const y10 = price * Math.pow(1.1, 10);
+  const y20 = price * Math.pow(1.1, 20);
+
+  return (
+    <main className="flex-1 flex flex-col fade-up">
+      <div className="flex items-center mb-10">
+        <button
+          onClick={onBack}
+          className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center"
+          aria-label="Back"
+          style={{ color: "#44413c" }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      </div>
+
+      <p className="text-[11px] tracking-label mb-3" style={{ color: "#d8cfc4" }}>
+        What if you invested it
+      </p>
+      <h2 className="text-2xl font-semibold mb-2" style={{ color: "#44413c" }}>
+        {item} · ${price.toFixed(2)}
+      </h2>
+
+      <h1 className="text-3xl leading-tight font-semibold mt-8 mb-6" style={{ color: "#44413c" }}>
+        Your {item} could become {formatMoney(y20)}
+      </h1>
+
+      <div className="rounded-[16px] p-7 text-white space-y-7" style={{ backgroundColor: "#55614b" }}>
+        <div>
+          <p className="text-lg font-semibold">📈 S&P 500 Index Fund</p>
+          <p className="text-sm font-light opacity-80 mt-1">
+            Historical avg. 10% annual return
+          </p>
+        </div>
+
+        <div>
+          <p className="text-3xl font-semibold">{formatMoney(y5)}</p>
+          <p className="text-sm font-light opacity-80 mt-1">in 5 years</p>
+        </div>
+        <div>
+          <p className="text-4xl font-semibold">{formatMoney(y10)}</p>
+          <p className="text-sm font-light opacity-80 mt-1">in 10 years</p>
+        </div>
+        <div>
+          <p className="text-6xl font-semibold tracking-tight">{formatMoney(y20)}</p>
+          <p className="text-sm font-light opacity-80 mt-2">in 20 years</p>
+        </div>
+      </div>
+
+      <div className="mt-auto pt-10 space-y-5">
+        <a
+          href="https://www.acorns.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full rounded-full py-4 text-base font-medium text-white text-center active:scale-[0.99] transition"
+          style={{ backgroundColor: "#55614b" }}
+        >
+          Start investing
+        </a>
+        <p className="text-xs font-light text-center" style={{ color: "#d8cfc4" }}>
+          Projections are estimates only. Past performance does not guarantee future results. This is not financial advice.
+        </p>
       </div>
     </main>
   );
