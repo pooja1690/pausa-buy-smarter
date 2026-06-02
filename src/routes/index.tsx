@@ -63,7 +63,7 @@ const FALLBACK_DEEP = [
 
 function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
-  const [mode, setMode] = useState<Mode>("quick");
+  
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
@@ -135,10 +135,6 @@ function PausaApp() {
     });
     setResult({ decision, explanation, id, estUses, deep: false });
     setStep("result");
-    if (mode === "deep") {
-      // auto-trigger deep follow-up
-      setTimeout(() => startDeepWith({ decision, explanation, id, estUses, deep: false }), 250);
-    }
   }
 
   async function answer(choice: Choice) {
@@ -257,10 +253,8 @@ function PausaApp() {
         <EntryScreen
           item={item}
           price={price}
-          mode={mode}
           setItem={setItem}
           setPrice={setPrice}
-          setMode={setMode}
           onStart={startFlow}
         />
       )}
@@ -351,18 +345,14 @@ function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void 
 function EntryScreen({
   item,
   price,
-  mode,
   setItem,
   setPrice,
-  setMode,
   onStart,
 }: {
   item: string;
   price: string;
-  mode: Mode;
   setItem: (s: string) => void;
   setPrice: (s: string) => void;
-  setMode: (m: Mode) => void;
   onStart: () => void;
 }) {
   return (
@@ -399,15 +389,10 @@ function EntryScreen({
           />
         </div>
 
-        <div className="pt-2">
-          <p className="text-[11px] tracking-label text-muted-foreground mb-3">Pace</p>
-          <ModeToggle mode={mode} setMode={setMode} />
-          <p className="text-xs font-light text-muted-foreground mt-2 px-1">
-            {mode === "quick"
-              ? "A few quick taps. Under 10 seconds."
-              : "A longer, more reflective check-in."}
-          </p>
-        </div>
+        <p className="text-xs font-light text-muted-foreground pt-1 px-1">
+          A few quick taps. Under 10 seconds.
+        </p>
+
 
         <button
           type="submit"
