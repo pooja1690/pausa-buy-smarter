@@ -135,10 +135,6 @@ function PausaApp() {
     });
     setResult({ decision, explanation, id, estUses, deep: false });
     setStep("result");
-    if (mode === "deep") {
-      // auto-trigger deep follow-up
-      setTimeout(() => startDeepWith({ decision, explanation, id, estUses, deep: false }), 250);
-    }
   }
 
   async function answer(choice: Choice) {
