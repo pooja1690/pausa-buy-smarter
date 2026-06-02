@@ -253,10 +253,8 @@ function PausaApp() {
         <EntryScreen
           item={item}
           price={price}
-          mode={mode}
           setItem={setItem}
           setPrice={setPrice}
-          setMode={setMode}
           onStart={startFlow}
         />
       )}
