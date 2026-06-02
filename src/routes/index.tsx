@@ -42,7 +42,8 @@ type Step =
   | "result"
   | "deep-preparing"
   | "deep-questions"
-  | "deep-loading";
+  | "deep-loading"
+  | "invest";
 
 type Mode = "quick" | "deep";
 
