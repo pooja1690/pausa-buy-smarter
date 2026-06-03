@@ -111,10 +111,12 @@ export const generateExplanation = createServerFn({ method: "POST" })
         .parse(d),
   )
   .handler(async ({ data }) => {
+    const consistencyRule =
+      "Your explanation must be consistent with and support the verdict. If verdict is BUY explain why it is a good purchase. If verdict is WAIT explain why they should wait. If verdict is SKIP explain why they should skip it. Never contradict the verdict.";
     const system = data.deep
-      ? "You write a focused 2–3 sentence explanation (max 60 words) of a buying decision, citing the strongest signals. Calm, practical, non-judgmental. No preamble, no quotes, no emojis, no bullet points."
-      : "You write ONE short sentence (max 20 words) explaining a buying decision. Tone: calm, practical, non-judgmental. No preamble, no quotes, no emojis.";
-    const prompt = `Item: ${data.item}\nDecision: ${data.decision}\nSignals: ${data.signals.join("; ")}\nWrite the explanation.`;
+      ? `You write a focused 2–3 sentence explanation (max 60 words) of a buying decision, citing the strongest signals. Calm, practical, non-judgmental. No preamble, no quotes, no emojis, no bullet points. ${consistencyRule}`
+      : `You write ONE short sentence (max 20 words) explaining a buying decision. Tone: calm, practical, non-judgmental. No preamble, no quotes, no emojis. ${consistencyRule}`;
+    const prompt = `Item: ${data.item}\nVerdict: ${data.decision}\nAll answers and signals: ${data.signals.join("; ")}\n\nWrite the explanation that supports the verdict "${data.decision}".`;
     const text = await callClaude(system, prompt, data.deep ? 350 : 200);
     const cleaned = text.replace(/^["']|["']$/g, "").trim();
     return { explanation: data.deep ? cleaned.slice(0, 600) : cleaned.split("\n")[0].slice(0, 240) };
