@@ -243,7 +243,7 @@ function PausaApp() {
         </Link>
         <Link
           to="/history"
-          className="flex items-center gap-1.5 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
         >
           <History className="h-4 w-4" />
           History
@@ -365,7 +365,7 @@ function EntryScreen({
 }) {
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
-      <p className="text-[11px] tracking-label text-muted-foreground mb-4">
+      <p className="text-[11px] tracking-label text-foreground mb-4">
         Take a PAUSA
       </p>
       <h1 className="text-4xl leading-tight mb-10 font-semibold">What are you about to buy?</h1>
@@ -397,7 +397,7 @@ function EntryScreen({
           />
         </div>
 
-        <p className="text-xs font-light text-muted-foreground pt-1 px-1">
+        <p className="text-xs font-light pt-1 px-1" style={{ color: "#d8cfc4" }}>
           A few quick taps. Under 10 seconds.
         </p>
 
