@@ -243,7 +243,7 @@ function PausaApp() {
         </Link>
         <Link
           to="/history"
-          className="flex items-center gap-1.5 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
         >
           <History className="h-4 w-4" />
           History
