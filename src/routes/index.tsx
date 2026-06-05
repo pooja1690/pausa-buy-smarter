@@ -365,7 +365,7 @@ function EntryScreen({
 }) {
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
-      <p className="text-[11px] tracking-label text-muted-foreground mb-4">
+      <p className="text-[11px] tracking-label text-foreground mb-4">
         Take a PAUSA
       </p>
       <h1 className="text-4xl leading-tight mb-10 font-semibold">What are you about to buy?</h1>
