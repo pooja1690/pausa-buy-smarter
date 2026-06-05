@@ -397,7 +397,7 @@ function EntryScreen({
           />
         </div>
 
-        <p className="text-xs font-light pt-1 px-1" style={{ color: "#d8cfc4" }}>
+        <p className="text-xs font-light pt-1 px-1 text-foreground">
           A few quick taps. Under 10 seconds.
         </p>
 
