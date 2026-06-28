@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, History, Loader2, Pause, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
