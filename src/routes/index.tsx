@@ -13,7 +13,7 @@ import {
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateQuestions, generateDeepQuestions, generateExplanation } from "@/lib/ai.functions";
+import { generateQuestions, generateDeepQuestions, generateExplanation, validateItem } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -64,6 +64,8 @@ const FALLBACK_DEEP = [
 
 function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
   
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
@@ -84,12 +86,76 @@ function PausaApp() {
   const fetchQuestions = useServerFn(generateQuestions);
   const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
+  const fetchValidate = useServerFn(validateItem);
 
   const navigate = useNavigate();
 
+  const INVALID_MSG =
+    "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
+  const VAGUE_MSG = "What are you thinking of buying, and about how much does it cost?";
+
+  function localValidate(input: string): "ok" | "invalid" | "uncertain" {
+    const t = input.trim();
+    if (t.length < 3) return "invalid";
+    const letters = t.replace(/[^a-zA-Z]/g, "");
+    if (letters.length < 2) return "invalid";
+    // symbols only / mostly
+    if (!/[a-zA-Z]/.test(t)) return "invalid";
+    const lower = t.toLowerCase();
+    const profanity = ["fuck", "shit", "bitch", "asshole", "cunt", "dick"];
+    const stripped = lower.replace(/[^a-z]/g, "");
+    if (profanity.some((p) => stripped === p || stripped === p + "s" || stripped === p + "ing")) {
+      return "invalid";
+    }
+    // keyboard smash: long run of consonants with no vowels
+    const words = lower.split(/\s+/);
+    const allGibberish = words.every((w) => {
+      const clean = w.replace(/[^a-z]/g, "");
+      if (clean.length < 3) return false;
+      const hasVowel = /[aeiouy]/.test(clean);
+      const longConsonantRun = /[bcdfghjklmnpqrstvwxz]{5,}/.test(clean);
+      return !hasVowel || longConsonantRun;
+    });
+    if (allGibberish && words.length <= 2) return "invalid";
+    // vague non-purchase single words
+    const vagueBlock = new Set([
+      "life", "sad", "whatever", "stuff", "things", "something", "anything",
+      "nothing", "happy", "love", "money", "help", "idk", "ok", "okay",
+    ]);
+    if (words.length === 1 && vagueBlock.has(stripped)) return "invalid";
+    return "uncertain";
+  }
+
   async function startFlow() {
     const trimmed = item.trim();
-    if (!trimmed) return;
+    setValidationError(null);
+    if (!trimmed) {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    const local = localValidate(trimmed);
+    if (local === "invalid") {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    setValidating(true);
+    let label: "valid" | "invalid" | "needs_more_detail" = "valid";
+    try {
+      const r = await fetchValidate({ data: { item: trimmed } });
+      label = r.label;
+    } catch {
+      // on failure, allow through rather than block the user
+      label = "valid";
+    }
+    setValidating(false);
+    if (label === "invalid") {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    if (label === "needs_more_detail") {
+      setValidationError(VAGUE_MSG);
+      return;
+    }
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
@@ -106,6 +172,7 @@ function PausaApp() {
     setQuestions(qs);
     setStep("questions");
   }
+
 
   async function finalizeQuick(allAnswers: Choice[]) {
     setStep("loading");
@@ -254,10 +321,16 @@ function PausaApp() {
         <EntryScreen
           item={item}
           price={price}
-          setItem={setItem}
+          setItem={(v) => {
+            setItem(v);
+            if (validationError) setValidationError(null);
+          }}
           setPrice={setPrice}
           onStart={startFlow}
+          error={validationError}
+          submitting={validating}
         />
+
       )}
 
       {step === "preparing" && <PreparingScreen item={item.trim()} />}
@@ -356,12 +429,16 @@ function EntryScreen({
   setItem,
   setPrice,
   onStart,
+  error,
+  submitting,
 }: {
   item: string;
   price: string;
   setItem: (s: string) => void;
   setPrice: (s: string) => void;
   onStart: () => void;
+  error: string | null;
+  submitting: boolean;
 }) {
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
@@ -377,13 +454,26 @@ function EntryScreen({
         }}
         className="space-y-4"
       >
-        <input
-          autoFocus
-          value={item}
-          onChange={(e) => setItem(e.target.value)}
-          placeholder="e.g. wireless headphones"
-          className="w-full rounded-[16px] bg-white border border-border px-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
-        />
+        <div>
+          <input
+            autoFocus
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+            placeholder="e.g. wireless headphones"
+            aria-invalid={!!error}
+            className={cn(
+              "w-full rounded-[16px] bg-white border px-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:ring-4 transition",
+              error
+                ? "border-[#b45a4a] focus:border-[#b45a4a] focus:ring-[#b45a4a]/10"
+                : "border-border focus:border-primary/60 focus:ring-primary/10",
+            )}
+          />
+          {error && (
+            <p className="mt-2 px-1 text-sm font-light leading-snug" style={{ color: "#b45a4a" }}>
+              {error}
+            </p>
+          )}
+        </div>
         <div className="relative">
           <span className="absolute left-5 top-1/2 -translate-y-1/2 text-border">
             $
@@ -404,15 +494,23 @@ function EntryScreen({
 
         <button
           type="submit"
-          disabled={!item.trim()}
-          className="mt-4 w-full rounded-full bg-primary text-primary-foreground py-4 text-base font-medium hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100"
+          disabled={!item.trim() || submitting}
+          className="mt-4 w-full rounded-full bg-primary text-primary-foreground py-4 text-base font-medium hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2"
         >
-          Help me decide
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking…
+            </>
+          ) : (
+            "Help me decide"
+          )}
         </button>
       </form>
     </main>
   );
 }
+
 
 /* ---------------- Preparing ---------------- */
 
