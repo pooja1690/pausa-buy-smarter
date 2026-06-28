@@ -63,6 +63,7 @@ const FALLBACK_DEEP = [
 ];
 
 function PausaApp() {
+  const [step, setStep] = useState<Step>("entry");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   
