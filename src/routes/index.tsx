@@ -86,12 +86,76 @@ function PausaApp() {
   const fetchQuestions = useServerFn(generateQuestions);
   const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
+  const fetchValidate = useServerFn(validateItem);
 
   const navigate = useNavigate();
 
+  const INVALID_MSG =
+    "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
+  const VAGUE_MSG = "What are you thinking of buying, and about how much does it cost?";
+
+  function localValidate(input: string): "ok" | "invalid" | "uncertain" {
+    const t = input.trim();
+    if (t.length < 3) return "invalid";
+    const letters = t.replace(/[^a-zA-Z]/g, "");
+    if (letters.length < 2) return "invalid";
+    // symbols only / mostly
+    if (!/[a-zA-Z]/.test(t)) return "invalid";
+    const lower = t.toLowerCase();
+    const profanity = ["fuck", "shit", "bitch", "asshole", "cunt", "dick"];
+    const stripped = lower.replace(/[^a-z]/g, "");
+    if (profanity.some((p) => stripped === p || stripped === p + "s" || stripped === p + "ing")) {
+      return "invalid";
+    }
+    // keyboard smash: long run of consonants with no vowels
+    const words = lower.split(/\s+/);
+    const allGibberish = words.every((w) => {
+      const clean = w.replace(/[^a-z]/g, "");
+      if (clean.length < 3) return false;
+      const hasVowel = /[aeiouy]/.test(clean);
+      const longConsonantRun = /[bcdfghjklmnpqrstvwxz]{5,}/.test(clean);
+      return !hasVowel || longConsonantRun;
+    });
+    if (allGibberish && words.length <= 2) return "invalid";
+    // vague non-purchase single words
+    const vagueBlock = new Set([
+      "life", "sad", "whatever", "stuff", "things", "something", "anything",
+      "nothing", "happy", "love", "money", "help", "idk", "ok", "okay",
+    ]);
+    if (words.length === 1 && vagueBlock.has(stripped)) return "invalid";
+    return "uncertain";
+  }
+
   async function startFlow() {
     const trimmed = item.trim();
-    if (!trimmed) return;
+    setValidationError(null);
+    if (!trimmed) {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    const local = localValidate(trimmed);
+    if (local === "invalid") {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    setValidating(true);
+    let label: "valid" | "invalid" | "needs_more_detail" = "valid";
+    try {
+      const r = await fetchValidate({ data: { item: trimmed } });
+      label = r.label;
+    } catch {
+      // on failure, allow through rather than block the user
+      label = "valid";
+    }
+    setValidating(false);
+    if (label === "invalid") {
+      setValidationError(INVALID_MSG);
+      return;
+    }
+    if (label === "needs_more_detail") {
+      setValidationError(VAGUE_MSG);
+      return;
+    }
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
@@ -108,6 +172,7 @@ function PausaApp() {
     setQuestions(qs);
     setStep("questions");
   }
+
 
   async function finalizeQuick(allAnswers: Choice[]) {
     setStep("loading");
