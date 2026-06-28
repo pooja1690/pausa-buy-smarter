@@ -218,16 +218,19 @@ function PausaApp() {
   }
 
   // Keep autostart ref in sync with the latest startFlow closure
-  autostartRef.current = () => { void startFlow(); };
+  autostartRef.current = (itemArg: string, priceArg: string) => {
+    void startFlow(itemArg, priceArg);
+  };
 
-  async function startFlow() {
-    const trimmed = item.trim();
+  async function startFlow(itemOverride?: string, priceOverride?: string) {
+    const trimmed = (itemOverride ?? item).trim();
+    const priceStr = priceOverride ?? price;
     setValidationError(null);
     if (!trimmed) {
       setValidationError(INVALID_MSG);
       return;
     }
-    const priceNum = price ? parseFloat(price) : undefined;
+    const priceNum = priceStr ? parseFloat(priceStr) : undefined;
     const local = localClassify(trimmed, priceNum);
     if (local === "invalid") {
       setValidationError(INVALID_MSG);
@@ -266,11 +269,13 @@ function PausaApp() {
       setStep("essential-check");
       return;
     }
-    await runDiscretionaryQuestionnaire();
+    await runDiscretionaryQuestionnaire(trimmed);
   }
 
-  async function runDiscretionaryQuestionnaire() {
-    const trimmed = item.trim();
+
+  async function runDiscretionaryQuestionnaire(itemOverride?: string) {
+    const trimmed = (itemOverride ?? item).trim();
+
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
