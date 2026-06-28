@@ -420,6 +420,26 @@ function PausaApp() {
 
       )}
 
+      {step === "essential-check" && (
+        <EssentialCheckScreen
+          item={item.trim()}
+          onYes={() => setStep("essential-result")}
+          onUpgrade={() => runDiscretionaryQuestionnaire()}
+          onUnsure={() => runDiscretionaryQuestionnaire()}
+          onBack={() => setStep("entry")}
+        />
+      )}
+
+      {step === "essential-result" && (
+        <EssentialResultScreen
+          item={item.trim()}
+          price={price ? parseFloat(price) : undefined}
+          onMarkNeeded={saveEssentialBuy}
+          onPausa={() => runDiscretionaryQuestionnaire()}
+          onReset={reset}
+        />
+      )}
+
       {step === "preparing" && <PreparingScreen item={item.trim()} />}
 
       {step === "questions" && questions.length > 0 && (
