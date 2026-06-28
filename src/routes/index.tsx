@@ -13,7 +13,7 @@ import {
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateQuestions, generateDeepQuestions, generateExplanation } from "@/lib/ai.functions";
+import { generateQuestions, generateDeepQuestions, generateExplanation, validateItem } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
