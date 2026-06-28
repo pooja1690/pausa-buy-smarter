@@ -88,7 +88,7 @@ function PausaApp() {
   const fetchQuestions = useServerFn(generateQuestions);
   const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
-  const fetchValidate = useServerFn(validateItem);
+  const fetchClassify = useServerFn(classifyPurchase);
 
   const navigate = useNavigate();
 
