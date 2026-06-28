@@ -490,7 +490,39 @@ function PausaApp() {
           onBack={() => setStep("result")}
         />
       )}
+
+      {step === "entry" && <ExtensionLink />}
     </div>
+  );
+}
+
+function ExtensionLink() {
+  function download() {
+    fetch("/ask-pausa-extension.zip")
+      .then((res) => {
+        if (!res.ok) throw new Error("Download failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "ask-pausa-extension.zip";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(() => alert("Sorry — couldn't download. Try again."));
+  }
+  return (
+    <footer className="pt-10 pb-2 text-center">
+      <button
+        onClick={download}
+        type="button"
+        className="text-xs font-light underline-offset-4 hover:underline transition"
+        style={{ color: "#8a8378" }}
+      >
+        Get the Chrome extension
+      </button>
+    </footer>
   );
 }
 
