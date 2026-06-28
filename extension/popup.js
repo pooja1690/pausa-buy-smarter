@@ -3,6 +3,11 @@ const tagEl = document.getElementById("tag");
 const ctxEl = document.getElementById("ctx");
 const muteBtn = document.getElementById("mute");
 const openBtn = document.getElementById("open");
+const itemEl = document.getElementById("item");
+const priceEl = document.getElementById("price");
+const detectedEl = document.getElementById("detected");
+
+const APP_URL = "https://askpausa.com/";
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -13,12 +18,34 @@ function hostnameFrom(url) {
   try { return new URL(url).hostname; } catch { return null; }
 }
 
+function getProduct(tabId) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type: "pausa:get-product", tabId }, (resp) => {
+        if (chrome.runtime.lastError) resolve(null);
+        else resolve(resp || null);
+      });
+    } catch { resolve(null); }
+  });
+}
+
+function buildOpenUrl() {
+  const url = new URL(APP_URL);
+  url.searchParams.set("utm_source", "ext");
+  const item = itemEl.value.trim();
+  const price = priceEl.value.trim();
+  if (item) url.searchParams.set("item", item);
+  if (price) url.searchParams.set("price", price);
+  return url.toString();
+}
+
+openBtn.addEventListener("click", async () => {
+  await chrome.tabs.create({ url: buildOpenUrl() });
+});
+
 async function refresh() {
   const tab = await getActiveTab();
   const host = tab?.url ? hostnameFrom(tab.url) : null;
-
-  // Always open in a new tab so the full app + AI work normally
-  openBtn.href = "https://askpausa.com/?utm_source=ext";
 
   if (!host || host.startsWith("chrome") || host === "newtab") {
     ctxEl.hidden = true;
@@ -28,12 +55,23 @@ async function refresh() {
   ctxEl.hidden = false;
   hostEl.textContent = host;
 
-  // Show "Shopping" tag if the badge is currently lit (means content script flagged it)
+  let isShopping = false;
   try {
     const badge = await chrome.action.getBadgeText({ tabId: tab.id });
+    isShopping = !!badge;
     tagEl.hidden = !badge;
   } catch {
     tagEl.hidden = true;
+  }
+
+  // Prefill from the page (best-effort)
+  const product = await getProduct(tab.id);
+  if (product?.title && !itemEl.value) {
+    itemEl.value = product.title.slice(0, 120);
+    detectedEl.hidden = false;
+  }
+  if (product?.price != null && !priceEl.value) {
+    priceEl.value = String(product.price);
   }
 
   const { mutedSites = {} } = await chrome.storage.local.get("mutedSites");

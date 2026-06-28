@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, History, Loader2, Pause, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -91,6 +91,34 @@ function PausaApp() {
   const fetchClassify = useServerFn(classifyPurchase);
 
   const navigate = useNavigate();
+
+  // Prefill from URL query params (e.g. from the browser extension).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const qItem = params.get("item");
+    const qPrice = params.get("price");
+    let changed = false;
+    if (qItem && !item) {
+      setItem(qItem.slice(0, 200));
+      changed = true;
+    }
+    if (qPrice && !price) {
+      const cleaned = qPrice.replace(/[^0-9.]/g, "");
+      if (cleaned) {
+        setPrice(cleaned);
+        changed = true;
+      }
+    }
+    if (changed) {
+      params.delete("item");
+      params.delete("price");
+      const q = params.toString();
+      const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const INVALID_MSG =
     "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
