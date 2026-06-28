@@ -321,10 +321,16 @@ function PausaApp() {
         <EntryScreen
           item={item}
           price={price}
-          setItem={setItem}
+          setItem={(v) => {
+            setItem(v);
+            if (validationError) setValidationError(null);
+          }}
           setPrice={setPrice}
           onStart={startFlow}
+          error={validationError}
+          submitting={validating}
         />
+
       )}
 
       {step === "preparing" && <PreparingScreen item={item.trim()} />}
