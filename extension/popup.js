@@ -134,7 +134,10 @@ function buildOpenUrl() {
   url.searchParams.set("embed", "1");
   const item = itemEl.value.trim();
   const price = priceEl.value.trim();
-  if (item) url.searchParams.set("item", item);
+  if (item) {
+    url.searchParams.set("item", item);
+    url.searchParams.set("autostart", "1");
+  }
   if (price) url.searchParams.set("price", price);
   return url.toString();
 }

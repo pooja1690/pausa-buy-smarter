@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, History, Loader2, Pause, Sparkles, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -68,7 +68,8 @@ function PausaApp() {
   const [step, setStep] = useState<Step>("entry");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
-  
+  const [embed, setEmbed] = useState(false);
+
   const [item, setItem] = useState("");
   const [price, setPrice] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
@@ -98,27 +99,43 @@ function PausaApp() {
     const params = new URLSearchParams(window.location.search);
     const qItem = params.get("item");
     const qPrice = params.get("price");
-    let changed = false;
-    if (qItem && !item) {
-      setItem(qItem.slice(0, 200));
-      changed = true;
+    const qEmbed = params.get("embed") === "1";
+    const qAutostart = params.get("autostart") === "1";
+    let nextItem = "";
+    let nextPrice = "";
+    if (qItem) {
+      nextItem = qItem.slice(0, 200);
+      setItem(nextItem);
     }
-    if (qPrice && !price) {
+    if (qPrice) {
       const cleaned = qPrice.replace(/[^0-9.]/g, "");
       if (cleaned) {
+        nextPrice = cleaned;
         setPrice(cleaned);
-        changed = true;
       }
     }
-    if (changed) {
+    if (qEmbed) setEmbed(true);
+    // Clean URL
+    if (qItem || qPrice) {
       params.delete("item");
       params.delete("price");
+      params.delete("autostart");
       const q = params.toString();
       const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
       window.history.replaceState({}, "", newUrl);
     }
+    // Autostart questionnaire if requested and we have an item
+    if (qAutostart && nextItem.trim()) {
+      // Defer one tick so state is committed
+      setTimeout(() => {
+        autostartRef.current?.(nextItem, nextPrice);
+      }, 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ref so autostart can call the latest startFlow without dep loops
+  const autostartRef = useRef<((item: string, price: string) => void) | null>(null);
 
   const INVALID_MSG =
     "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
@@ -199,6 +216,9 @@ function PausaApp() {
 
     return "uncertain";
   }
+
+  // Keep autostart ref in sync with the latest startFlow closure
+  autostartRef.current = () => { void startFlow(); };
 
   async function startFlow() {
     const trimmed = item.trim();
@@ -415,22 +435,24 @@ function PausaApp() {
   }
 
   return (
-    <div className="pausa-screen">
-      <header className="flex items-center justify-between pb-8">
-        <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
-          <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
-            <Pause className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
-          </div>
-          <span className="font-display text-lg font-semibold">PAUSA</span>
-        </Link>
-        <Link
-          to="/history"
-          className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
-        >
-          <History className="h-4 w-4" />
-          History
-        </Link>
-      </header>
+    <div className={cn("pausa-screen", embed && "pausa-screen--embed")}>
+      {!embed && (
+        <header className="flex items-center justify-between pb-8">
+          <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
+            <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
+              <Pause className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
+            </div>
+            <span className="font-display text-lg font-semibold">PAUSA</span>
+          </Link>
+          <Link
+            to="/history"
+            className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
+          >
+            <History className="h-4 w-4" />
+            History
+          </Link>
+        </header>
+      )}
 
       {step === "entry" && (
         <EntryScreen
