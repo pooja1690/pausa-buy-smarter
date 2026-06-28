@@ -36,6 +36,8 @@ export const Route = createFileRoute("/")({
 
 type Step =
   | "entry"
+  | "essential-check"
+  | "essential-result"
   | "preparing"
   | "questions"
   | "loading"
