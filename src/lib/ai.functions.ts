@@ -67,6 +67,44 @@ Output ONLY a single JSON object: {"label":"valid"} or {"label":"needs_more_deta
     return { label: "invalid" as const };
   });
 
+export const classifyPurchase = createServerFn({ method: "POST" })
+  .inputValidator((d: { item: string; price?: number }) =>
+    z.object({ item: z.string().min(1).max(200), price: z.number().nonnegative().optional() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const system = `You classify a user's purchase candidate into ONE of five labels for a mindful spending app.
+
+Labels:
+- "invalid" — profanity, gibberish, keyboard smash, random symbols, vague non-purchase words ("life", "sad", "whatever"), or anything not buyable.
+- "needs_more_detail" — could be a purchase but too vague to act on (e.g. "gift", "stuff", "Amazon", "shopping", "something for home").
+- "routine_essential" — bare necessity, low-cost, consumable or replacement of an everyday item the person is out of or running low on. Examples: toothpaste, toilet paper, dish soap, basic shampoo, soap, diapers, baby wipes, laundry detergent, milk, basic groceries, basic medicine / first-aid, school supplies, basic replacement charger or cable at a normal price. Must NOT be premium, luxury, designer, imported, gift set, or unusually expensive for its category.
+- "ambiguous_essential" — a category that could be either a routine restock OR an upgrade / nice-to-have. Examples: shampoo (unspecified), skincare, cookware, groceries, shoes, clothes, phone charger, vitamins, household items, cleaning supplies, kids clothes.
+- "discretionary" — expensive, emotional, premium, duplicate, non-urgent, or nice-to-have. Examples: headphones, luxury shampoo, $80 shampoo, designer bag, another water bottle, Dyson hair dryer, vacation, dress, toy, decor, new gadget.
+
+Rules:
+- Words like "luxury", "premium", "designer", "imported", "gift set", or premium-brand names (Dyson, etc.) → discretionary, never routine_essential.
+- If price is unusually high for an essential category (e.g. shampoo > $25, toothpaste > $15), classify as discretionary or ambiguous_essential, never routine_essential.
+- "shoes" → ambiguous_essential. "designer shoes" → discretionary.
+- "shampoo" or "$8 shampoo" → ambiguous_essential. "$65 luxury shampoo" → discretionary. "basic shampoo" / "dish soap" / "toothpaste" → routine_essential.
+
+Output ONLY a single JSON object: {"label":"<one of the five>"}. No prose.`;
+    const priceText = data.price != null ? ` (price: $${data.price})` : "";
+    const raw = await callClaude(system, `Input: ${data.item}${priceText}\n\nReturn the JSON object now.`, 80);
+    const match = raw.match(/\{[\s\S]*?\}/);
+    const allowed = ["invalid", "needs_more_detail", "routine_essential", "ambiguous_essential", "discretionary"] as const;
+    type Label = typeof allowed[number];
+    if (!match) return { label: "discretionary" as Label };
+    try {
+      const parsed = JSON.parse(match[0]) as { label?: string };
+      if (parsed.label && (allowed as readonly string[]).includes(parsed.label)) {
+        return { label: parsed.label as Label };
+      }
+    } catch {
+      /* fall through */
+    }
+    return { label: "discretionary" as Label };
+  });
+
 export const generateQuestions = createServerFn({ method: "POST" })
   .inputValidator((d: { item: string; count?: number }) =>
     z.object({ item: z.string().min(1).max(200), count: z.number().int().min(3).max(5).optional() }).parse(d),
