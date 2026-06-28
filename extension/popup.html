@@ -16,24 +16,25 @@
         margin: 0;
         padding: 0;
         width: 380px;
+        min-height: 0;
         background: var(--bg);
         color: var(--ink);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
       }
-      body.embed { width: 420px; }
-      #frameView {
-        display: none;
-        width: 420px;
-        height: 600px;
-        border: 0;
-        background: var(--bg);
-      }
-      body.embed #frameView { display: block; }
-      body.embed .wrap { display: none; }
+      * { box-sizing: border-box; }
       .wrap { padding: 18px 18px 14px; }
+      .view[hidden] { display: none; }
       .brand {
         display: flex; align-items: center; gap: 8px;
         font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+      }
+      .topbar {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        margin-bottom: 14px;
+      }
+      .icon-btn {
+        width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line);
+        background: white; color: var(--ink); cursor: pointer; font-size: 17px; line-height: 1;
       }
       .dot {
         width: 20px; height: 20px; border-radius: 999px;
@@ -98,6 +99,40 @@
         margin-top: 4px;
       }
       button.primary:hover { opacity: 0.92; }
+      .progress {
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        flex: 1;
+      }
+      .progress span {
+        width: 7px; height: 7px; border-radius: 999px; background: var(--line);
+      }
+      .progress span.active { background: var(--accent); }
+      .question-kicker {
+        margin: 10px 0 8px;
+        color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+      }
+      .question-title {
+        font-size: 24px; line-height: 1.16; font-weight: 650; margin: 0 0 18px;
+        overflow-wrap: anywhere;
+      }
+      .item-chip {
+        max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 11px; color: var(--muted); margin-bottom: 14px;
+      }
+      .answers { display: grid; gap: 9px; }
+      .answer {
+        width: 100%; border: 1px solid var(--line); background: white; color: var(--ink);
+        border-radius: 12px; padding: 12px 14px; font: inherit; font-size: 13px; font-weight: 600;
+        cursor: pointer; text-align: center;
+      }
+      .answer.primary-answer { background: var(--accent); color: white; border-color: var(--accent); }
+      .result-card {
+        border-radius: 16px; padding: 18px; background: var(--accent); color: white; margin: 10px 0 14px;
+      }
+      .result-card.wait { background: #dab8a2; color: var(--ink); }
+      .result-card.skip { background: #d8cfc4; color: var(--ink); }
+      .result-label { font-size: 38px; line-height: 1; font-weight: 750; margin: 0 0 12px; }
+      .result-copy { font-size: 13px; line-height: 1.45; margin: 0; }
       button.ghost {
         display: block; width: 100%;
         background: transparent; color: var(--muted);
@@ -109,7 +144,7 @@
     </style>
   </head>
   <body>
-    <div class="wrap">
+    <div class="wrap view" id="entryView">
       <div class="brand">
         <span class="dot" aria-hidden="true"></span>
         <span>PAUSA</span>
@@ -139,7 +174,30 @@
       <button class="primary" id="open">Help me decide</button>
       <button class="ghost" id="mute" hidden>Mute this site</button>
     </div>
-    <iframe id="frameView" title="Pausa decision"></iframe>
+
+    <div class="wrap view" id="questionView" hidden>
+      <div class="topbar">
+        <button class="icon-btn" id="back" aria-label="Back">‹</button>
+        <div class="progress" id="progress" aria-label="Question progress"></div>
+        <span style="width:30px"></span>
+      </div>
+      <div class="question-kicker" id="questionKicker">Question 1 of 4</div>
+      <div class="item-chip" id="questionItem"></div>
+      <h2 class="question-title" id="questionTitle"></h2>
+      <div class="answers" id="answers"></div>
+    </div>
+
+    <div class="wrap view" id="resultView" hidden>
+      <div class="brand">
+        <span class="dot" aria-hidden="true"></span>
+        <span>PAUSA</span>
+      </div>
+      <div class="result-card" id="resultCard">
+        <div class="result-label" id="resultLabel">WAIT</div>
+        <p class="result-copy" id="resultCopy"></p>
+      </div>
+      <button class="primary" id="again">Decide on something else</button>
+    </div>
     <script src="popup.js"></script>
   </body>
 </html>
