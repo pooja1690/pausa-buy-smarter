@@ -273,8 +273,9 @@ function PausaApp() {
   }
 
 
-  async function runDiscretionaryQuestionnaire() {
-    const trimmed = item.trim();
+  async function runDiscretionaryQuestionnaire(itemOverride?: string) {
+    const trimmed = (itemOverride ?? item).trim();
+
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
