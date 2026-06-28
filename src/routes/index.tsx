@@ -13,7 +13,7 @@ import {
   type Choice,
   type Decision,
 } from "@/lib/pausa";
-import { generateQuestions, generateDeepQuestions, generateExplanation, validateItem } from "@/lib/ai.functions";
+import { generateQuestions, generateDeepQuestions, generateExplanation, classifyPurchase } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,6 +36,8 @@ export const Route = createFileRoute("/")({
 
 type Step =
   | "entry"
+  | "essential-check"
+  | "essential-result"
   | "preparing"
   | "questions"
   | "loading"
@@ -86,7 +88,7 @@ function PausaApp() {
   const fetchQuestions = useServerFn(generateQuestions);
   const fetchDeepQuestions = useServerFn(generateDeepQuestions);
   const fetchExplanation = useServerFn(generateExplanation);
-  const fetchValidate = useServerFn(validateItem);
+  const fetchClassify = useServerFn(classifyPurchase);
 
   const navigate = useNavigate();
 
@@ -94,12 +96,18 @@ function PausaApp() {
     "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
   const VAGUE_MSG = "What are you thinking of buying, and about how much does it cost?";
 
-  function localValidate(input: string): "ok" | "invalid" | "uncertain" {
+  type ClassLabel =
+    | "invalid"
+    | "needs_more_detail"
+    | "routine_essential"
+    | "ambiguous_essential"
+    | "discretionary";
+
+  function localClassify(input: string, priceNum?: number): ClassLabel | "uncertain" {
     const t = input.trim();
     if (t.length < 3) return "invalid";
     const letters = t.replace(/[^a-zA-Z]/g, "");
     if (letters.length < 2) return "invalid";
-    // symbols only / mostly
     if (!/[a-zA-Z]/.test(t)) return "invalid";
     const lower = t.toLowerCase();
     const profanity = ["fuck", "shit", "bitch", "asshole", "cunt", "dick"];
@@ -107,7 +115,6 @@ function PausaApp() {
     if (profanity.some((p) => stripped === p || stripped === p + "s" || stripped === p + "ing")) {
       return "invalid";
     }
-    // keyboard smash: long run of consonants with no vowels
     const words = lower.split(/\s+/);
     const allGibberish = words.every((w) => {
       const clean = w.replace(/[^a-z]/g, "");
@@ -117,12 +124,51 @@ function PausaApp() {
       return !hasVowel || longConsonantRun;
     });
     if (allGibberish && words.length <= 2) return "invalid";
-    // vague non-purchase single words
     const vagueBlock = new Set([
-      "life", "sad", "whatever", "stuff", "things", "something", "anything",
-      "nothing", "happy", "love", "money", "help", "idk", "ok", "okay",
+      "life", "sad", "whatever", "happy", "love", "money", "help", "idk", "ok", "okay",
     ]);
     if (words.length === 1 && vagueBlock.has(stripped)) return "invalid";
+
+    const vagueNeedsDetail = new Set([
+      "stuff", "things", "something", "anything", "nothing",
+      "gift", "gifts", "amazon", "shopping", "cart",
+    ]);
+    if (words.length === 1 && vagueNeedsDetail.has(stripped)) return "needs_more_detail";
+
+    // premium / luxury modifiers → discretionary
+    const luxuryHints = ["luxury", "premium", "designer", "imported", "gift set", "dyson", "fancy", "artisan", "limited edition"];
+    const hasLuxury = luxuryHints.some((h) => lower.includes(h));
+    if (hasLuxury) return "discretionary";
+
+    // routine essentials keywords
+    const routine: Array<{ kw: string; cap: number }> = [
+      { kw: "toothpaste", cap: 15 },
+      { kw: "toilet paper", cap: 40 },
+      { kw: "dish soap", cap: 15 },
+      { kw: "dishwashing", cap: 20 },
+      { kw: "dishwasher detergent", cap: 25 },
+      { kw: "laundry detergent", cap: 35 },
+      { kw: "diapers", cap: 60 },
+      { kw: "baby wipes", cap: 30 },
+      { kw: "milk", cap: 15 },
+      { kw: "bread", cap: 10 },
+      { kw: "eggs", cap: 15 },
+      { kw: "first aid", cap: 30 },
+      { kw: "band-aid", cap: 15 },
+      { kw: "bandaid", cap: 15 },
+      { kw: "tylenol", cap: 20 },
+      { kw: "advil", cap: 20 },
+      { kw: "ibuprofen", cap: 20 },
+      { kw: "school supplies", cap: 50 },
+    ];
+    const matchedRoutine = routine.find((r) => lower.includes(r.kw));
+    if (matchedRoutine) {
+      if (priceNum != null && priceNum > matchedRoutine.cap) return "discretionary";
+      return "routine_essential";
+    }
+    // explicit "basic X" → routine
+    if (/^basic\s+/.test(lower) && (priceNum == null || priceNum <= 25)) return "routine_essential";
+
     return "uncertain";
   }
 
@@ -133,21 +179,29 @@ function PausaApp() {
       setValidationError(INVALID_MSG);
       return;
     }
-    const local = localValidate(trimmed);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const local = localClassify(trimmed, priceNum);
     if (local === "invalid") {
       setValidationError(INVALID_MSG);
       return;
     }
-    setValidating(true);
-    let label: "valid" | "invalid" | "needs_more_detail" = "valid";
-    try {
-      const r = await fetchValidate({ data: { item: trimmed } });
-      label = r.label;
-    } catch {
-      // on failure, allow through rather than block the user
-      label = "valid";
+    if (local === "needs_more_detail") {
+      setValidationError(VAGUE_MSG);
+      return;
     }
-    setValidating(false);
+    let label: ClassLabel;
+    if (local === "routine_essential") {
+      label = "routine_essential";
+    } else {
+      setValidating(true);
+      try {
+        const r = await fetchClassify({ data: { item: trimmed, price: priceNum } });
+        label = r.label;
+      } catch {
+        label = "discretionary";
+      }
+      setValidating(false);
+    }
     if (label === "invalid") {
       setValidationError(INVALID_MSG);
       return;
@@ -156,6 +210,19 @@ function PausaApp() {
       setValidationError(VAGUE_MSG);
       return;
     }
+    if (label === "routine_essential") {
+      setStep("essential-result");
+      return;
+    }
+    if (label === "ambiguous_essential") {
+      setStep("essential-check");
+      return;
+    }
+    await runDiscretionaryQuestionnaire();
+  }
+
+  async function runDiscretionaryQuestionnaire() {
+    const trimmed = item.trim();
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
@@ -172,6 +239,26 @@ function PausaApp() {
     setQuestions(qs);
     setStep("questions");
   }
+
+  function saveEssentialBuy() {
+    const trimmed = item.trim();
+    const priceNum = price ? parseFloat(price) : undefined;
+    const explanation =
+      "This looks like a routine essential. If you\u2019re out or running low, it\u2019s reasonable to buy. Keep it practical and avoid upgrading just because it\u2019s on sale.";
+    addRecord({
+      id: crypto.randomUUID(),
+      item: trimmed,
+      price: priceNum,
+      decision: "BUY",
+      explanation,
+      createdAt: Date.now(),
+      boughtAnyway: null,
+      estUses: 1,
+      questions: [],
+    });
+    navigate({ to: "/history" });
+  }
+
 
 
   async function finalizeQuick(allAnswers: Choice[]) {
@@ -331,6 +418,26 @@ function PausaApp() {
           submitting={validating}
         />
 
+      )}
+
+      {step === "essential-check" && (
+        <EssentialCheckScreen
+          item={item.trim()}
+          onYes={() => setStep("essential-result")}
+          onUpgrade={() => runDiscretionaryQuestionnaire()}
+          onUnsure={() => runDiscretionaryQuestionnaire()}
+          onBack={() => setStep("entry")}
+        />
+      )}
+
+      {step === "essential-result" && (
+        <EssentialResultScreen
+          item={item.trim()}
+          price={price ? parseFloat(price) : undefined}
+          onMarkNeeded={saveEssentialBuy}
+          onPausa={() => runDiscretionaryQuestionnaire()}
+          onReset={reset}
+        />
       )}
 
       {step === "preparing" && <PreparingScreen item={item.trim()} />}
@@ -825,6 +932,119 @@ function InvestScreen({
         <p className="text-xs font-light text-center" style={{ color: "#d8cfc4" }}>
           Projections are estimates only. Past performance does not guarantee future results. This is not financial advice.
         </p>
+      </div>
+    </main>
+  );
+}
+
+/* ---------------- Essential Check ---------------- */
+
+function EssentialCheckScreen({
+  item,
+  onYes,
+  onUpgrade,
+  onUnsure,
+  onBack,
+}: {
+  item: string;
+  onYes: () => void;
+  onUpgrade: () => void;
+  onUnsure: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <main className="flex-1 flex flex-col fade-up">
+      <div className="flex items-center mb-10">
+        <button
+          onClick={onBack}
+          className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center"
+          aria-label="Back"
+          style={{ color: "#44413c" }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      </div>
+
+      <p className="text-[11px] tracking-label text-muted-foreground mb-4">Quick check</p>
+      <h2 className="text-3xl leading-snug mb-2 font-semibold text-foreground">
+        Is this something you&rsquo;re out of or truly need right now?
+      </h2>
+      <p className="text-base font-light text-muted-foreground mb-12 truncate">{item}</p>
+
+      <div className="space-y-3 mt-auto">
+        <button
+          onClick={onYes}
+          className="w-full rounded-[16px] bg-primary text-white px-5 py-[18px] text-center text-base font-medium active:scale-[0.99] transition"
+        >
+          Yes, I need it
+        </button>
+        <button
+          onClick={onUpgrade}
+          className="w-full rounded-[16px] bg-wait text-foreground px-5 py-[18px] text-center text-base font-medium active:scale-[0.99] transition"
+        >
+          No, it&rsquo;s an upgrade
+        </button>
+        <button
+          onClick={onUnsure}
+          className="w-full rounded-[16px] bg-skip text-foreground px-5 py-[18px] text-center text-base font-medium active:scale-[0.99] transition"
+        >
+          Not sure
+        </button>
+      </div>
+    </main>
+  );
+}
+
+/* ---------------- Essential Result (fast-lane BUY) ---------------- */
+
+function EssentialResultScreen({
+  item,
+  price,
+  onMarkNeeded,
+  onPausa,
+  onReset,
+}: {
+  item: string;
+  price?: number;
+  onMarkNeeded: () => void;
+  onPausa: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <main className="flex-1 flex flex-col fade-up">
+      <p className="text-[11px] tracking-label text-muted-foreground mb-3">Your pausa</p>
+      <h2 className="text-xl text-foreground/80 mb-8 truncate font-regular">{item}</h2>
+
+      <div className="rounded-[24px] p-8 mb-6 bg-buy text-white">
+        <div className="flex items-baseline justify-between mb-5">
+          <span className="font-display text-6xl font-semibold tracking-tight">BUY</span>
+          {price ? <span className="text-sm font-light opacity-80">${price.toFixed(2)}</span> : null}
+        </div>
+        <p className="text-base leading-relaxed font-regular whitespace-pre-line opacity-95">
+          This looks like a routine essential. If you&rsquo;re out or running low, it&rsquo;s reasonable to buy. Keep it practical and avoid upgrading just because it&rsquo;s on sale.
+        </p>
+      </div>
+
+      <div className="mt-auto space-y-3">
+        <button
+          onClick={onMarkNeeded}
+          className="w-full rounded-full bg-primary text-white py-4 text-base font-medium active:scale-[0.99] transition"
+        >
+          Mark as needed
+        </button>
+        <button
+          onClick={onPausa}
+          className="w-full rounded-full bg-white border-2 py-4 text-base font-medium active:scale-[0.99] transition"
+          style={{ borderColor: "#55614b", color: "#55614b" }}
+        >
+          I&rsquo;m unsure &mdash; Pausa it
+        </button>
+        <button
+          onClick={onReset}
+          className="w-full rounded-full bg-transparent border border-border py-4 text-base font-light text-foreground hover:bg-white/50 transition"
+        >
+          Decide on something else
+        </button>
       </div>
     </main>
   );
