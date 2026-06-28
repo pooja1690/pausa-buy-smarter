@@ -1,13 +1,19 @@
-const hostEl = document.getElementById("host");
-const tagEl = document.getElementById("tag");
-const ctxEl = document.getElementById("ctx");
+const sourcePill = document.getElementById("sourcePill");
+const sourceHost = document.getElementById("sourceHost");
 const muteBtn = document.getElementById("mute");
 const openBtn = document.getElementById("open");
 const itemEl = document.getElementById("item");
 const priceEl = document.getElementById("price");
 const detectedEl = document.getElementById("detected");
+const formView = document.getElementById("formView");
+const verdictView = document.getElementById("verdictView");
+const vItem = document.getElementById("vItem");
+const vBack = document.getElementById("vBack");
+const vDeep = document.getElementById("vDeep");
 
 const APP_URL = "https://askpausa.com/";
+
+let fullItemTitle = "";
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -16,6 +22,19 @@ async function getActiveTab() {
 
 function hostnameFrom(url) {
   try { return new URL(url).hostname; } catch { return null; }
+}
+
+function prettyHost(host) {
+  if (!host) return "";
+  const h = host.replace(/^www\./, "");
+  const parts = h.split(".");
+  if (parts.length <= 2) return parts[0];
+  // amazon.co.uk → amazon
+  return parts[0];
+}
+
+function titleCase(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function getCachedProduct(tabId) {
@@ -125,6 +144,74 @@ async function getProduct(tab) {
   }
 }
 
+/* ---------- Fast-lane classifier (mirrors web app heuristic) ---------- */
+function localClassify(input, priceNum) {
+  const t = (input || "").trim();
+  if (t.length < 3) return "uncertain";
+  const lower = t.toLowerCase();
+
+  const luxuryHints = ["luxury","premium","designer","imported","gift set","dyson","fancy","artisan","limited edition","clinique","la mer","chanel","dior","gucci","prada","kiehl","drunk elephant","sk-ii"];
+  if (luxuryHints.some((h) => lower.includes(h))) return "discretionary";
+
+  // Budget / drugstore brands that signal routine restock when price is modest
+  const budgetBrands = ["aveeno","dove","suave","pantene","head & shoulders","head and shoulders","herbal essences","tresemme","garnier","cerave","cetaphil","neutrogena","colgate","crest","oral-b","oral b","gillette","bic","scott","charmin","cottonelle","bounty","tide","gain","persil","arm & hammer","seventh generation","huggies","pampers"];
+  const isBudgetBrand = budgetBrands.some((b) => lower.includes(b));
+
+  const routine = [
+    { kw: "toothpaste", cap: 15 },
+    { kw: "toothbrush", cap: 20 },
+    { kw: "toilet paper", cap: 40 },
+    { kw: "paper towel", cap: 30 },
+    { kw: "dish soap", cap: 15 },
+    { kw: "dishwashing", cap: 20 },
+    { kw: "dishwasher detergent", cap: 25 },
+    { kw: "laundry detergent", cap: 35 },
+    { kw: "diapers", cap: 60 },
+    { kw: "baby wipes", cap: 30 },
+    { kw: "milk", cap: 15 },
+    { kw: "bread", cap: 10 },
+    { kw: "eggs", cap: 15 },
+    { kw: "first aid", cap: 30 },
+    { kw: "band-aid", cap: 15 },
+    { kw: "bandaid", cap: 15 },
+    { kw: "tylenol", cap: 20 },
+    { kw: "advil", cap: 20 },
+    { kw: "ibuprofen", cap: 20 },
+    { kw: "school supplies", cap: 50 },
+    // ambiguous categories — only fast-lane when paired with a budget brand
+    { kw: "shampoo", cap: 25, requiresBudget: true },
+    { kw: "conditioner", cap: 25, requiresBudget: true },
+    { kw: "body wash", cap: 20, requiresBudget: true },
+    { kw: "soap", cap: 15, requiresBudget: true },
+    { kw: "deodorant", cap: 20, requiresBudget: true },
+    { kw: "razor", cap: 25, requiresBudget: true },
+    { kw: "moisturizer", cap: 20, requiresBudget: true },
+    { kw: "lotion", cap: 20, requiresBudget: true },
+    { kw: "face wash", cap: 20, requiresBudget: true },
+  ];
+  const matched = routine.find((r) => lower.includes(r.kw));
+  if (matched) {
+    if (matched.requiresBudget && !isBudgetBrand) return "uncertain";
+    if (priceNum != null && priceNum > matched.cap) return "discretionary";
+    return "routine_essential";
+  }
+  if (/^basic\s+/.test(lower) && (priceNum == null || priceNum <= 25)) return "routine_essential";
+  return "uncertain";
+}
+
+function setSource(host) {
+  if (!host) { sourcePill.hidden = true; return; }
+  sourcePill.hidden = false;
+  sourceHost.textContent = host.replace(/^www\./, "");
+}
+
+function setItem(title) {
+  fullItemTitle = title || "";
+  itemEl.value = fullItemTitle;
+  itemEl.title = fullItemTitle;
+  detectedEl.hidden = !fullItemTitle;
+}
+
 function buildOpenUrl() {
   const url = new URL(APP_URL);
   url.searchParams.set("utm_source", "ext");
@@ -138,7 +225,32 @@ function buildOpenUrl() {
   return url.toString();
 }
 
+function showVerdict(title) {
+  vItem.textContent = title;
+  formView.hidden = true;
+  verdictView.hidden = false;
+}
+
+function showForm() {
+  verdictView.hidden = true;
+  formView.hidden = false;
+}
+
 openBtn.addEventListener("click", async () => {
+  const item = itemEl.value.trim();
+  const priceRaw = priceEl.value.trim();
+  const priceNum = priceRaw ? parseFloat(priceRaw) : undefined;
+  const label = localClassify(item, priceNum);
+  if (label === "routine_essential") {
+    showVerdict(item);
+    return;
+  }
+  await chrome.tabs.create({ url: buildOpenUrl() });
+  window.close();
+});
+
+vBack.addEventListener("click", showForm);
+vDeep.addEventListener("click", async () => {
   await chrome.tabs.create({ url: buildOpenUrl() });
   window.close();
 });
@@ -148,33 +260,23 @@ async function refresh() {
   const host = tab?.url ? hostnameFrom(tab.url) : null;
 
   if (!host || host.startsWith("chrome") || host === "newtab") {
-    ctxEl.hidden = true;
+    sourcePill.hidden = true;
     muteBtn.hidden = true;
     return;
   }
-  ctxEl.hidden = false;
-  hostEl.textContent = host;
-
-  try {
-    const badge = await chrome.action.getBadgeText({ tabId: tab.id });
-    tagEl.hidden = !badge;
-  } catch {
-    tagEl.hidden = true;
-  }
+  setSource(host);
 
   const product = await getProduct(tab);
-  if (product?.title && !itemEl.value) {
-    itemEl.value = product.title.slice(0, 120);
-    detectedEl.hidden = false;
-  }
-  if (product?.price != null && !priceEl.value) {
-    priceEl.value = String(product.price);
-  }
+  if (product?.title && !itemEl.value) setItem(product.title.slice(0, 200));
+  if (product?.price != null && !priceEl.value) priceEl.value = String(product.price);
 
   const { mutedSites = {} } = await chrome.storage.local.get("mutedSites");
   const muted = !!mutedSites[host];
+  const pretty = titleCase(prettyHost(host));
   muteBtn.hidden = false;
-  muteBtn.textContent = muted ? "Unmute this site" : "Mute this site";
+  muteBtn.textContent = muted
+    ? `Show on ${pretty} again`
+    : `Don't show on ${pretty}`;
   muteBtn.classList.toggle("active", muted);
 
   muteBtn.onclick = async () => {

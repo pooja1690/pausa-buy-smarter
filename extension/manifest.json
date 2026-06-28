@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Ask Pausa — Buy, Wait, or Skip",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A calm 10-second sanity check before you buy. Subtly highlights when you're on a shopping page.",
-  "permissions": ["storage", "tabs", "scripting", "activeTab"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "optional_host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Take a Pausa",
@@ -18,7 +18,37 @@
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "*://*.amazon.com/*",
+        "*://*.amazon.co.uk/*",
+        "*://*.amazon.ca/*",
+        "*://*.amazon.de/*",
+        "*://*.amazon.fr/*",
+        "*://*.amazon.in/*",
+        "*://*.ebay.com/*",
+        "*://*.etsy.com/*",
+        "*://*.walmart.com/*",
+        "*://*.target.com/*",
+        "*://*.bestbuy.com/*",
+        "*://*.aliexpress.com/*",
+        "*://*.temu.com/*",
+        "*://*.shein.com/*",
+        "*://*.wayfair.com/*",
+        "*://*.ikea.com/*",
+        "*://*.costco.com/*",
+        "*://*.homedepot.com/*",
+        "*://*.asos.com/*",
+        "*://*.zara.com/*",
+        "*://*.hm.com/*",
+        "*://*.nike.com/*",
+        "*://*.adidas.com/*",
+        "*://*.sephora.com/*",
+        "*://*.ulta.com/*",
+        "*://*.newegg.com/*",
+        "*://*.bhphotovideo.com/*",
+        "*://shop.app/*",
+        "*://*.myshopify.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
