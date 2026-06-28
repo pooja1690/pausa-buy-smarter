@@ -99,27 +99,43 @@ function PausaApp() {
     const params = new URLSearchParams(window.location.search);
     const qItem = params.get("item");
     const qPrice = params.get("price");
-    let changed = false;
-    if (qItem && !item) {
-      setItem(qItem.slice(0, 200));
-      changed = true;
+    const qEmbed = params.get("embed") === "1";
+    const qAutostart = params.get("autostart") === "1";
+    let nextItem = "";
+    let nextPrice = "";
+    if (qItem) {
+      nextItem = qItem.slice(0, 200);
+      setItem(nextItem);
     }
-    if (qPrice && !price) {
+    if (qPrice) {
       const cleaned = qPrice.replace(/[^0-9.]/g, "");
       if (cleaned) {
+        nextPrice = cleaned;
         setPrice(cleaned);
-        changed = true;
       }
     }
-    if (changed) {
+    if (qEmbed) setEmbed(true);
+    // Clean URL
+    if (qItem || qPrice) {
       params.delete("item");
       params.delete("price");
+      params.delete("autostart");
       const q = params.toString();
       const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
       window.history.replaceState({}, "", newUrl);
     }
+    // Autostart questionnaire if requested and we have an item
+    if (qAutostart && nextItem.trim()) {
+      // Defer one tick so state is committed
+      setTimeout(() => {
+        autostartRef.current?.(nextItem, nextPrice);
+      }, 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ref so autostart can call the latest startFlow without dep loops
+  const autostartRef = useRef<((item: string, price: string) => void) | null>(null);
 
   const INVALID_MSG =
     "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
