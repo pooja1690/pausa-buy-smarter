@@ -96,12 +96,18 @@ function PausaApp() {
     "Hmm, I need a real item or purchase to help you pause. Try something like \u201C$120 headphones,\u201D \u201Cnew shoes,\u201D or \u201CAmazon cart.\u201D";
   const VAGUE_MSG = "What are you thinking of buying, and about how much does it cost?";
 
-  function localValidate(input: string): "ok" | "invalid" | "uncertain" {
+  type ClassLabel =
+    | "invalid"
+    | "needs_more_detail"
+    | "routine_essential"
+    | "ambiguous_essential"
+    | "discretionary";
+
+  function localClassify(input: string, priceNum?: number): ClassLabel | "uncertain" {
     const t = input.trim();
     if (t.length < 3) return "invalid";
     const letters = t.replace(/[^a-zA-Z]/g, "");
     if (letters.length < 2) return "invalid";
-    // symbols only / mostly
     if (!/[a-zA-Z]/.test(t)) return "invalid";
     const lower = t.toLowerCase();
     const profanity = ["fuck", "shit", "bitch", "asshole", "cunt", "dick"];
@@ -109,7 +115,6 @@ function PausaApp() {
     if (profanity.some((p) => stripped === p || stripped === p + "s" || stripped === p + "ing")) {
       return "invalid";
     }
-    // keyboard smash: long run of consonants with no vowels
     const words = lower.split(/\s+/);
     const allGibberish = words.every((w) => {
       const clean = w.replace(/[^a-z]/g, "");
@@ -119,12 +124,51 @@ function PausaApp() {
       return !hasVowel || longConsonantRun;
     });
     if (allGibberish && words.length <= 2) return "invalid";
-    // vague non-purchase single words
     const vagueBlock = new Set([
-      "life", "sad", "whatever", "stuff", "things", "something", "anything",
-      "nothing", "happy", "love", "money", "help", "idk", "ok", "okay",
+      "life", "sad", "whatever", "happy", "love", "money", "help", "idk", "ok", "okay",
     ]);
     if (words.length === 1 && vagueBlock.has(stripped)) return "invalid";
+
+    const vagueNeedsDetail = new Set([
+      "stuff", "things", "something", "anything", "nothing",
+      "gift", "gifts", "amazon", "shopping", "cart",
+    ]);
+    if (words.length === 1 && vagueNeedsDetail.has(stripped)) return "needs_more_detail";
+
+    // premium / luxury modifiers → discretionary
+    const luxuryHints = ["luxury", "premium", "designer", "imported", "gift set", "dyson", "fancy", "artisan", "limited edition"];
+    const hasLuxury = luxuryHints.some((h) => lower.includes(h));
+    if (hasLuxury) return "discretionary";
+
+    // routine essentials keywords
+    const routine: Array<{ kw: string; cap: number }> = [
+      { kw: "toothpaste", cap: 15 },
+      { kw: "toilet paper", cap: 40 },
+      { kw: "dish soap", cap: 15 },
+      { kw: "dishwashing", cap: 20 },
+      { kw: "dishwasher detergent", cap: 25 },
+      { kw: "laundry detergent", cap: 35 },
+      { kw: "diapers", cap: 60 },
+      { kw: "baby wipes", cap: 30 },
+      { kw: "milk", cap: 15 },
+      { kw: "bread", cap: 10 },
+      { kw: "eggs", cap: 15 },
+      { kw: "first aid", cap: 30 },
+      { kw: "band-aid", cap: 15 },
+      { kw: "bandaid", cap: 15 },
+      { kw: "tylenol", cap: 20 },
+      { kw: "advil", cap: 20 },
+      { kw: "ibuprofen", cap: 20 },
+      { kw: "school supplies", cap: 50 },
+    ];
+    const matchedRoutine = routine.find((r) => lower.includes(r.kw));
+    if (matchedRoutine) {
+      if (priceNum != null && priceNum > matchedRoutine.cap) return "discretionary";
+      return "routine_essential";
+    }
+    // explicit "basic X" → routine
+    if (/^basic\s+/.test(lower) && (priceNum == null || priceNum <= 25)) return "routine_essential";
+
     return "uncertain";
   }
 
@@ -135,21 +179,29 @@ function PausaApp() {
       setValidationError(INVALID_MSG);
       return;
     }
-    const local = localValidate(trimmed);
+    const priceNum = price ? parseFloat(price) : undefined;
+    const local = localClassify(trimmed, priceNum);
     if (local === "invalid") {
       setValidationError(INVALID_MSG);
       return;
     }
-    setValidating(true);
-    let label: "valid" | "invalid" | "needs_more_detail" = "valid";
-    try {
-      const r = await fetchValidate({ data: { item: trimmed } });
-      label = r.label;
-    } catch {
-      // on failure, allow through rather than block the user
-      label = "valid";
+    if (local === "needs_more_detail") {
+      setValidationError(VAGUE_MSG);
+      return;
     }
-    setValidating(false);
+    let label: ClassLabel;
+    if (local === "routine_essential") {
+      label = "routine_essential";
+    } else {
+      setValidating(true);
+      try {
+        const r = await fetchClassify({ data: { item: trimmed, price: priceNum } });
+        label = r.label;
+      } catch {
+        label = "discretionary";
+      }
+      setValidating(false);
+    }
     if (label === "invalid") {
       setValidationError(INVALID_MSG);
       return;
@@ -158,6 +210,19 @@ function PausaApp() {
       setValidationError(VAGUE_MSG);
       return;
     }
+    if (label === "routine_essential") {
+      setStep("essential-result");
+      return;
+    }
+    if (label === "ambiguous_essential") {
+      setStep("essential-check");
+      return;
+    }
+    await runDiscretionaryQuestionnaire();
+  }
+
+  async function runDiscretionaryQuestionnaire() {
+    const trimmed = item.trim();
     setStep("preparing");
     setQIndex(0);
     setAnswers([]);
@@ -174,6 +239,26 @@ function PausaApp() {
     setQuestions(qs);
     setStep("questions");
   }
+
+  function saveEssentialBuy() {
+    const trimmed = item.trim();
+    const priceNum = price ? parseFloat(price) : undefined;
+    const explanation =
+      "This looks like a routine essential. If you\u2019re out or running low, it\u2019s reasonable to buy. Keep it practical and avoid upgrading just because it\u2019s on sale.";
+    addRecord({
+      id: crypto.randomUUID(),
+      item: trimmed,
+      price: priceNum,
+      decision: "BUY",
+      explanation,
+      createdAt: Date.now(),
+      boughtAnyway: null,
+      estUses: 1,
+      questions: [],
+    });
+    navigate({ to: "/history" });
+  }
+
 
 
   async function finalizeQuick(allAnswers: Choice[]) {
