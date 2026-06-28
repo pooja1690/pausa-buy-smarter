@@ -3,7 +3,8 @@
   "name": "Ask Pausa — Buy, Wait, or Skip",
   "version": "1.0.0",
   "description": "A calm 10-second sanity check before you buy. Subtly highlights when you're on a shopping page.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Take a Pausa",
