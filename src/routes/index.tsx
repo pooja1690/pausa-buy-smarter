@@ -429,12 +429,16 @@ function EntryScreen({
   setItem,
   setPrice,
   onStart,
+  error,
+  submitting,
 }: {
   item: string;
   price: string;
   setItem: (s: string) => void;
   setPrice: (s: string) => void;
   onStart: () => void;
+  error: string | null;
+  submitting: boolean;
 }) {
   return (
     <main className="flex-1 flex flex-col justify-center fade-up">
@@ -450,13 +454,26 @@ function EntryScreen({
         }}
         className="space-y-4"
       >
-        <input
-          autoFocus
-          value={item}
-          onChange={(e) => setItem(e.target.value)}
-          placeholder="e.g. wireless headphones"
-          className="w-full rounded-[16px] bg-white border border-border px-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition"
-        />
+        <div>
+          <input
+            autoFocus
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+            placeholder="e.g. wireless headphones"
+            aria-invalid={!!error}
+            className={cn(
+              "w-full rounded-[16px] bg-white border px-5 py-4 text-base text-foreground placeholder:text-border outline-none focus:ring-4 transition",
+              error
+                ? "border-[#b45a4a] focus:border-[#b45a4a] focus:ring-[#b45a4a]/10"
+                : "border-border focus:border-primary/60 focus:ring-primary/10",
+            )}
+          />
+          {error && (
+            <p className="mt-2 px-1 text-sm font-light leading-snug" style={{ color: "#b45a4a" }}>
+              {error}
+            </p>
+          )}
+        </div>
         <div className="relative">
           <span className="absolute left-5 top-1/2 -translate-y-1/2 text-border">
             $
@@ -477,15 +494,23 @@ function EntryScreen({
 
         <button
           type="submit"
-          disabled={!item.trim()}
-          className="mt-4 w-full rounded-full bg-primary text-primary-foreground py-4 text-base font-medium hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100"
+          disabled={!item.trim() || submitting}
+          className="mt-4 w-full rounded-full bg-primary text-primary-foreground py-4 text-base font-medium hover:bg-primary/90 active:scale-[0.99] transition disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2"
         >
-          Help me decide
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking…
+            </>
+          ) : (
+            "Help me decide"
+          )}
         </button>
       </form>
     </main>
   );
 }
+
 
 /* ---------------- Preparing ---------------- */
 
