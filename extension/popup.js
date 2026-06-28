@@ -1,41 +1,54 @@
 const hostEl = document.getElementById("host");
+const tagEl = document.getElementById("tag");
+const ctxEl = document.getElementById("ctx");
 const muteBtn = document.getElementById("mute");
+const openBtn = document.getElementById("open");
 
-async function getActiveHost() {
+async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.url) return { host: null, tabId: null };
-  try {
-    return { host: new URL(tab.url).hostname, tabId: tab.id };
-  } catch {
-    return { host: null, tabId: tab.id };
-  }
+  return tab || null;
+}
+
+function hostnameFrom(url) {
+  try { return new URL(url).hostname; } catch { return null; }
 }
 
 async function refresh() {
-  const { host, tabId } = await getActiveHost();
-  if (!host) {
-    hostEl.textContent = "No site";
-    muteBtn.style.display = "none";
+  const tab = await getActiveTab();
+  const host = tab?.url ? hostnameFrom(tab.url) : null;
+
+  // Always open in a new tab so the full app + AI work normally
+  openBtn.href = "https://askpausa.com/?utm_source=ext";
+
+  if (!host || host.startsWith("chrome") || host === "newtab") {
+    ctxEl.hidden = true;
+    muteBtn.hidden = true;
     return;
   }
+  ctxEl.hidden = false;
   hostEl.textContent = host;
+
+  // Show "Shopping" tag if the badge is currently lit (means content script flagged it)
+  try {
+    const badge = await chrome.action.getBadgeText({ tabId: tab.id });
+    tagEl.hidden = !badge;
+  } catch {
+    tagEl.hidden = true;
+  }
+
   const { mutedSites = {} } = await chrome.storage.local.get("mutedSites");
   const muted = !!mutedSites[host];
+  muteBtn.hidden = false;
   muteBtn.textContent = muted ? "Unmute this site" : "Mute this site";
-  muteBtn.classList.toggle("muted-tag", muted);
+  muteBtn.classList.toggle("active", muted);
 
   muteBtn.onclick = async () => {
     const next = { ...mutedSites };
     if (muted) delete next[host];
     else next[host] = true;
     await chrome.storage.local.set({ mutedSites: next });
-    // Clear badge immediately if muting
-    if (!muted && tabId != null) {
-      try {
-        await chrome.action.setBadgeText({ tabId, text: "" });
-      } catch {
-        /* ignore */
-      }
+    if (!muted && tab?.id != null) {
+      try { await chrome.action.setBadgeText({ tabId: tab.id, text: "" }); } catch {}
     }
     refresh();
   };
