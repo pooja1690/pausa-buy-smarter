@@ -6,33 +6,8 @@ const openBtn = document.getElementById("open");
 const itemEl = document.getElementById("item");
 const priceEl = document.getElementById("price");
 const detectedEl = document.getElementById("detected");
-const entryView = document.getElementById("entryView");
-const questionView = document.getElementById("questionView");
-const resultView = document.getElementById("resultView");
-const backBtn = document.getElementById("back");
-const progressEl = document.getElementById("progress");
-const questionKickerEl = document.getElementById("questionKicker");
-const questionItemEl = document.getElementById("questionItem");
-const questionTitleEl = document.getElementById("questionTitle");
-const answersEl = document.getElementById("answers");
-const resultCardEl = document.getElementById("resultCard");
-const resultLabelEl = document.getElementById("resultLabel");
-const resultCopyEl = document.getElementById("resultCopy");
-const againBtn = document.getElementById("again");
 
 const APP_URL = "https://askpausa.com/";
-const QUESTIONS = [
-  "Will you use this often?",
-  "Do you already have something similar?",
-  "Would you still want this tomorrow?",
-  "Is the price comfortable right now?",
-];
-const ANSWERS = ["Yes", "Maybe", "No"];
-
-let activeItem = "";
-let activePrice = "";
-let qIndex = 0;
-let answers = [];
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -54,7 +29,6 @@ function getCachedProduct(tabId) {
   });
 }
 
-// Runs in the page context — pure function, no closure deps.
 function extractInPage() {
   const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
   const metaContent = (sels) => {
@@ -138,10 +112,8 @@ function extractInPage() {
 }
 
 async function getProduct(tab) {
-  // Try cached (content script may have already run)
   const cached = await getCachedProduct(tab.id);
   if (cached?.title) return cached;
-  // Fall back to on-demand extraction
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -156,7 +128,6 @@ async function getProduct(tab) {
 function buildOpenUrl() {
   const url = new URL(APP_URL);
   url.searchParams.set("utm_source", "ext");
-  url.searchParams.set("embed", "1");
   const item = itemEl.value.trim();
   const price = priceEl.value.trim();
   if (item) {
@@ -167,86 +138,10 @@ function buildOpenUrl() {
   return url.toString();
 }
 
-function show(view) {
-  entryView.hidden = view !== "entry";
-  questionView.hidden = view !== "question";
-  resultView.hidden = view !== "result";
-}
-
-function renderQuestion() {
-  show("question");
-  questionKickerEl.textContent = `Question ${qIndex + 1} of ${QUESTIONS.length}`;
-  questionItemEl.textContent = activePrice ? `${activeItem} · $${activePrice}` : activeItem;
-  questionTitleEl.textContent = QUESTIONS[qIndex];
-  progressEl.innerHTML = "";
-  QUESTIONS.forEach((_, i) => {
-    const dot = document.createElement("span");
-    if (i <= qIndex) dot.className = "active";
-    progressEl.appendChild(dot);
-  });
-  answersEl.innerHTML = "";
-  ANSWERS.forEach((label, value) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `answer${value === 0 ? " primary-answer" : ""}`;
-    button.textContent = label;
-    button.addEventListener("click", () => chooseAnswer(value));
-    answersEl.appendChild(button);
-  });
-}
-
-function scoreDecision() {
-  const total = answers.reduce((sum, value) => sum + value, 0);
-  const ratio = total / (QUESTIONS.length * 2);
-  if (ratio <= 0.3) return "BUY";
-  if (ratio <= 0.6) return "WAIT";
-  return "SKIP";
-}
-
-function renderResult() {
-  const decision = scoreDecision();
-  resultLabelEl.textContent = decision;
-  resultCardEl.className = `result-card ${decision.toLowerCase()}`;
-  if (decision === "BUY") {
-    resultCopyEl.textContent = "This sounds genuinely useful and aligned with your life right now.";
-  } else if (decision === "WAIT") {
-    resultCopyEl.textContent = "There’s some hesitation here. Wait 24 hours and see if you still want it.";
-  } else {
-    resultCopyEl.textContent = "You may already have what you need. This one can pass gently.";
-  }
-  show("result");
-}
-
-function chooseAnswer(value) {
-  answers.push(value);
-  if (answers.length < QUESTIONS.length) {
-    qIndex += 1;
-    renderQuestion();
-  } else {
-    renderResult();
-  }
-}
-
-openBtn.addEventListener("click", () => {
-  activeItem = itemEl.value.trim();
-  activePrice = priceEl.value.trim();
-  if (!activeItem) return;
-  qIndex = 0;
-  answers = [];
-  renderQuestion();
+openBtn.addEventListener("click", async () => {
+  await chrome.tabs.create({ url: buildOpenUrl() });
+  window.close();
 });
-
-backBtn.addEventListener("click", () => {
-  if (qIndex === 0) {
-    show("entry");
-    return;
-  }
-  answers.pop();
-  qIndex -= 1;
-  renderQuestion();
-});
-
-againBtn.addEventListener("click", () => show("entry"));
 
 async function refresh() {
   const tab = await getActiveTab();
@@ -260,16 +155,13 @@ async function refresh() {
   ctxEl.hidden = false;
   hostEl.textContent = host;
 
-  let isShopping = false;
   try {
     const badge = await chrome.action.getBadgeText({ tabId: tab.id });
-    isShopping = !!badge;
     tagEl.hidden = !badge;
   } catch {
     tagEl.hidden = true;
   }
 
-  // Prefill from the page (best-effort)
   const product = await getProduct(tab);
   if (product?.title && !itemEl.value) {
     itemEl.value = product.title.slice(0, 120);
