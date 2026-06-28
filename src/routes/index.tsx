@@ -435,22 +435,24 @@ function PausaApp() {
   }
 
   return (
-    <div className="pausa-screen">
-      <header className="flex items-center justify-between pb-8">
-        <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
-          <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
-            <Pause className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
-          </div>
-          <span className="font-display text-lg font-semibold">PAUSA</span>
-        </Link>
-        <Link
-          to="/history"
-          className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
-        >
-          <History className="h-4 w-4" />
-          History
-        </Link>
-      </header>
+    <div className={cn("pausa-screen", embed && "pausa-screen--embed")}>
+      {!embed && (
+        <header className="flex items-center justify-between pb-8">
+          <Link to="/" onClick={reset} className="flex items-center gap-2 text-foreground">
+            <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center">
+              <Pause className="h-3.5 w-3.5 text-primary" strokeWidth={3} />
+            </div>
+            <span className="font-display text-lg font-semibold">PAUSA</span>
+          </Link>
+          <Link
+            to="/history"
+            className="flex items-center gap-1.5 text-sm font-light text-foreground hover:opacity-70 transition-colors"
+          >
+            <History className="h-4 w-4" />
+            History
+          </Link>
+        </header>
+      )}
 
       {step === "entry" && (
         <EntryScreen
