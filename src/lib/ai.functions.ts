@@ -40,6 +40,33 @@ function extractJsonArray(text: string): unknown {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
+export const validateItem = createServerFn({ method: "POST" })
+  .inputValidator((d: { item: string }) =>
+    z.object({ item: z.string().min(1).max(200) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const system = `You classify whether a user's input describes a real, specific purchase candidate — an item, product, service, experience, subscription, trip, gift, or shopping category that someone could reasonably spend money on.
+
+Return ONE of three labels:
+- "valid" — clearly a purchase candidate (e.g. "headphones", "$200 shoes", "Disney trip", "Amazon cart", "gym membership", "skincare serum", "birthday gift")
+- "needs_more_detail" — could be a purchase but is too vague to evaluate (e.g. "stuff", "things to buy", "something nice")
+- "invalid" — profanity-only, gibberish, keyboard smash, random symbols, vague non-purchase words ("life", "sad", "whatever"), or anything that does not describe something someone could buy
+
+Output ONLY a single JSON object: {"label":"valid"} or {"label":"needs_more_detail"} or {"label":"invalid"}. No prose.`;
+    const raw = await callClaude(system, `Input: ${data.item}\n\nReturn the JSON object now.`, 60);
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (!match) return { label: "invalid" as const };
+    try {
+      const parsed = JSON.parse(match[0]) as { label?: string };
+      if (parsed.label === "valid" || parsed.label === "needs_more_detail" || parsed.label === "invalid") {
+        return { label: parsed.label };
+      }
+    } catch {
+      /* fall through */
+    }
+    return { label: "invalid" as const };
+  });
+
 export const generateQuestions = createServerFn({ method: "POST" })
   .inputValidator((d: { item: string; count?: number }) =>
     z.object({ item: z.string().min(1).max(200), count: z.number().int().min(3).max(5).optional() }).parse(d),
