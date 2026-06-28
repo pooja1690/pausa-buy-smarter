@@ -217,6 +217,9 @@ function PausaApp() {
     return "uncertain";
   }
 
+  // Keep autostart ref in sync with the latest startFlow closure
+  autostartRef.current = () => { void startFlow(); };
+
   async function startFlow() {
     const trimmed = item.trim();
     setValidationError(null);
