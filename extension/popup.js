@@ -131,6 +131,7 @@ async function getProduct(tab) {
 function buildOpenUrl() {
   const url = new URL(APP_URL);
   url.searchParams.set("utm_source", "ext");
+  url.searchParams.set("embed", "1");
   const item = itemEl.value.trim();
   const price = priceEl.value.trim();
   if (item) url.searchParams.set("item", item);
@@ -138,8 +139,10 @@ function buildOpenUrl() {
   return url.toString();
 }
 
-openBtn.addEventListener("click", async () => {
-  await chrome.tabs.create({ url: buildOpenUrl() });
+openBtn.addEventListener("click", () => {
+  const frame = document.getElementById("frameView");
+  frame.src = buildOpenUrl();
+  document.body.classList.add("embed");
 });
 
 async function refresh() {

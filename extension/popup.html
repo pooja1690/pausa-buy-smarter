@@ -15,11 +15,21 @@
       html, body {
         margin: 0;
         padding: 0;
-        width: 340px;
+        width: 380px;
         background: var(--bg);
         color: var(--ink);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
       }
+      body.embed { width: 420px; }
+      #frameView {
+        display: none;
+        width: 420px;
+        height: 600px;
+        border: 0;
+        background: var(--bg);
+      }
+      body.embed #frameView { display: block; }
+      body.embed .wrap { display: none; }
       .wrap { padding: 18px 18px 14px; }
       .brand {
         display: flex; align-items: center; gap: 8px;
@@ -129,6 +139,7 @@
       <button class="primary" id="open">Help me decide</button>
       <button class="ghost" id="mute" hidden>Mute this site</button>
     </div>
+    <iframe id="frameView" title="Pausa decision"></iframe>
     <script src="popup.js"></script>
   </body>
 </html>
